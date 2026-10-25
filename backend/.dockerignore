@@ -4,3 +4,8 @@ __pycache__/
 .pytest_cache/
 tests/
 *.log
+
+# MCP is a local-only feature (refer to docs/mcp.md): it runs on the developer
+# machine, never in Cloud Run, so neither the code nor the entry point is shipped.
+mcp_server.py
+physlab_mcp/

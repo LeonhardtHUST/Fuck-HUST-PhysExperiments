@@ -2,6 +2,23 @@
 
 PhysLab 的版本记录。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## Unreleased
+
+### Added
+
+- **MCP Server（stdio）**：`backend/mcp_server.py` + `backend/physlab_mcp/`，把实验查询、数据校验、计算与拟合、报告/记录表生成、手写记录表识别暴露为 MCP 工具，供 codex / opencode / CodeBuddy / Claude Desktop 直接调用；与网页共用同一套计算核心
+- **产物落盘**：报告、记录表、拟合图写入 `PHYSICSLAB_MCP_OUTPUT_DIR`（默认系统临时目录 `physlab-mcp/`），返回绝对路径 + MIME + 字节数，不通过协议传输大段二进制
+- **数据特征参考工具**：按 `experiments/*/data_reference.json` 内的 `experiment_id` 建索引，新增实验无需改代码
+- **默认关闭的共建工具**：`contribute_record_sheet` / `commit_contributed_data` / `withdraw_contribution` 仅在 `PHYSICSLAB_MCP_ENABLE_DATA_COLLECTION=true` 且 `ENABLE_DATA_COLLECTION=true` 时注册，且每次调用都要求 `consent=true`
+- **npm 包装**：`npm run mcp`（前台启动 stdio 服务器）与 `npm run mcp:check`（打印工具清单自检），由 `scripts/mcp.mjs` 自动定位 `.venv` 解释器并检查 `mcp` 依赖
+- `docs/mcp.md`：三份客户端配置片段、`data` 三种结构、环境变量与排障表
+- README 增加 Vite+ 用法：`vp run <task>` / `vpr <task>` 与 npm 脚本的对照，以及「`vpr` 不吞 `--`」的差异说明
+
+### Changed
+
+- **MCP 明确为本地能力**：`backend/Dockerfile` 不再打包 `mcp_server.py` / `physlab_mcp/`，`backend/.dockerignore` 同时把它们排除出构建上下文，云端只部署 `uvicorn` 的 HTTP 后端（见 `docs/deployment.md`）
+- 「必做子实验是否填完整」的判断抽到 `app/experiment_gate.py`，报告路由与 MCP 工具共用同一规则与文案（HTTP 行为不变）
+
 ## 2.0 — 2026-09-18
 
 PhysLab 2.0：从「实验数据处理工具」升级为具备真实数据共建能力的实验 AI 平台。

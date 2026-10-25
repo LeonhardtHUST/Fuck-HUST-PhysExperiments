@@ -7,7 +7,9 @@
     "dev": "node scripts/dev.mjs dev",
     "build": "node scripts/dev.mjs build",
     "prod": "node scripts/dev.mjs prod",
-    "stop": "node scripts/dev.mjs stop"
+    "stop": "node scripts/dev.mjs stop",
+    "mcp": "node scripts/mcp.mjs",
+    "mcp:check": "node scripts/mcp.mjs --check"
   },
   "engines": {
     "node": ">=20.9.0"

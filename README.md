@@ -159,6 +159,9 @@ PhysLab 负责采集与切分，[PhysLab_OCR](https://github.com/Bogger111/PhysL
 | `npm run build` | 只构建前端（`next build` 静态导出到 `frontend/out`） |
 | `npm run prod` | 先构建，再以**生产产物**启动（后端不带 `--reload` + 静态服务器），页面不再实时渲染，明显更流畅 |
 | `npm run stop` | 停掉占用 8001 / 3000 的进程 |
+| `npm run mcp` | 前台启动本地 MCP Server（stdio，供 AI 客户端接入；不监听端口，见下） |
+| `npm run mcp:check` | 打印 MCP 工具清单自检，不进入协议、不常驻 |
+| `npm run stop` | 停掉占用 8001 / 3000 的进程 |
 
 `npm run dev` 只是转发到下面的脚本；需要细粒度参数时直接用脚本：
 
@@ -205,10 +208,30 @@ npm run prod -- --no-browser --detach     # 构建 + 后台生产模式，不弹
 | `dev.sh` | bash（Git Bash / Linux / macOS） | 与 `dev.ps1` 等价，参数为 `--build` / `--prod` / `--detach` / `--stop` |
 | `dev.mjs` | 跨平台（npm 脚本入口） | `npm run dev / build / prod / stop` 的分发器，自动选用上面的 `.ps1` 或 `.sh` |
 | `serve-static.mjs` | 跨平台 | 生产模式的零依赖静态服务器，托管 `frontend/out`（目录补 `/` 301、`index.html` 落盘、MIME、缓存头、404） |
+| `mcp.mjs` | 跨平台（npm 脚本入口） | `npm run mcp` / `mcp:check` 的启动器：定位 `.venv` 解释器、检查 `mcp` 依赖，再转发到 `backend/mcp_server.py` |
+| `serve-static.mjs` | 跨平台 | 生产模式的零依赖静态服务器，托管 `frontend/out`（目录补 `/` 301、`index.html` 落盘、MIME、缓存头、404） |
 | `export_ocr_dataset.py` | 跨平台（Python） | 导出经用户明确同意并确认的记录，供后续 OCR 研究使用；不做训练、裁剪或识别 |
 | `generate_simulated_reports.py` | 跨平台（Python） | 生成整套合成报告，用于打印排版 QA（数字仅为夹具，不代表真实结果正确性） |
 
 `npm run *` 只负责参数转发，脚本本身可直接调用，例如 `.\scripts\dev.ps1 -Prod -Detach -NoBrowser` 或 `./scripts/dev.sh --prod --detach --no-browser`。
+
+### 用 Vite+（`vp` / `vpr`）运行
+
+装了 [Vite+](https://viteplus.dev/guide/) 的话，可以用 `vp run <task>` 跑本仓库的 npm 脚本；`vpr` 是它的简写（等价于 `vp run`），不装 npm 也能用：
+
+| npm | Vite+ |
+|---|---|
+| `npm run dev` | `vpr dev` 或 `vp run dev` |
+| `npm run build` | `vpr build` |
+| `npm run prod` | `vpr prod` |
+| `npm run stop` | `vpr stop` |
+| `npm run mcp` | `vpr mcp` |
+| `npm run mcp:check` | `vpr mcp:check` |
+
+- **附加参数不要写 `--`**：npm 会吞掉 `--`，`vpr` 则把它原样传给脚本（`vpr prod -- --no-browser` 会被 `dev.mjs` 当成未知参数拒绝）。Vite+ 用户请直接写 `vpr prod --no-browser`、`vpr dev --no-browser`。
+- 只写 `vpr run <task>` 会报 `Task "run" not found`：`vpr` 本身已经是 `vp run`，长写法用 `vp run <task>`。
+- 输出里的 `warn: This project does not use vite-plus` 和 `cache disabled` 属正常：本仓库只借 `vpr` 当任务运行器，没有迁移到 Vite+ 工具链，命令最终仍走 `scripts/dev.mjs`，行为与 npm 一致。
+- 尽量用长参数（`--no-browser` 而不是 `-d`）：`vp run` 自己会解析 `-r` / `-F` / `-v` 等短选项。
 
 ### 手动启动
 
@@ -227,6 +250,33 @@ cd frontend && npm install && npm run dev
 ENABLE_DATA_COLLECTION=true     # 打开数据共建
 PHYSICSLAB_DEV_MODE=true        # 打开开发者统计面板
 ```
+
+### MCP Server（可选，仅本地）
+
+PhysLab 也能作为 MCP Server 被 AI 客户端（codex / opencode / CodeBuddy / Claude Desktop）直接调用：选实验、校验数据、计算绘图、生成 Word/PDF 报告与记录表。它与网页**共用同一套计算核心**。
+
+**MCP 只在本机运行**：不监听端口、不走网络、不随 `npm run deploy` 或云端镜像一起部署——`backend/Dockerfile` 不打包它，`backend/.dockerignore` 也把它排除在构建上下文外。上云的只有 `uvicorn` 暴露的 HTTP 后端。
+
+```bash
+npm run mcp:check      # 打印 9 个工具的自检清单（stderr），不进入协议、不常驻
+npm run mcp            # 前台启动 stdio 服务器，Ctrl+C 结束；AI 客户端会自己拉起 python 入口
+```
+
+```json
+{
+  "mcpServers": {
+    "physlab": {
+      "type": "stdio",
+      "command": "<仓库>/.venv/Scripts/python.exe",
+      "args": ["<仓库>/backend/mcp_server.py"]
+    }
+  }
+}
+```
+
+产物（报告、记录表、拟合图）写入系统临时目录下的 `physlab-mcp/`，用 `PHYSICSLAB_MCP_OUTPUT_DIR` 可指定固定目录。数据共建相关工具默认不注册，需 `PHYSICSLAB_MCP_ENABLE_DATA_COLLECTION=true` 且后端 `ENABLE_DATA_COLLECTION=true`。
+
+配置写法、工具清单、`data` 三种结构与排障见 [docs/mcp.md](docs/mcp.md)。
 
 更多细节见 [docs/physkiller-2.0.md](docs/physkiller-2.0.md)（架构与流水线）、[docs/screenshots.md](docs/screenshots.md)（截图清单）、[CHANGELOG.md](CHANGELOG.md)（发布说明）。
 

@@ -47,33 +47,6 @@ async def soundlight_report(req: SoundLightReportRequest, fmt: str = "docx", par
     return _response(content, f"声速光速的测量-完整报告.{fmt}", fmt)
 
 
-def _validate_required_data(config: dict, data: Dict[str, Dict[str, Any]]) -> None:
-    missing = []
-    for method in config.get("methods", []):
-        if not method.get("required"):
-            continue
-        submitted = data.get(method["id"])
-        rows = submitted.get("rows", []) if submitted else []
-        columns = [column["key"] for column in method.get("columns", [])]
-        # 行数可自由增删：只要求达到计算下限（rowCount 仅是讲义推荐条数），
-        # 且已提交的每一行都填完整
-        min_rows = max(1, int(method.get("minRows") or 1))
-        params = submitted.get("params", {}) if submitted else {}
-        required_params = [parameter["key"] for parameter in method.get("params", [])
-                           if parameter.get("required")]
-        complete = (
-            len(rows) >= min_rows
-            and all(row.get(key) not in (None, "")
-                    for row in rows for key in columns)
-            # 现场实测的参数（如卧式电桥的预平衡 Rn）缺一不可，否则该方法的公式根本无法反解
-            and all(params.get(key) not in (None, "") for key in required_params)
-        )
-        if not complete:
-            missing.append(method["name"])
-    if missing:
-        raise HTTPException(status_code=400, detail=f"请先填写完全部必做实验：{'、'.join(missing)}")
-
-
 @router.post("/api/experiments/{experiment_id}/report")
 async def experiment_report(experiment_id: str, req: GenericExperimentRequest, fmt: str = "docx"):
     experiment = experiment_or_404(experiment_id)
@@ -81,7 +54,6 @@ async def experiment_report(experiment_id: str, req: GenericExperimentRequest, f
         raise HTTPException(status_code=400, detail="fmt 必须是 docx 或 pdf")
     if not req.data:
         raise HTTPException(status_code=400, detail="未提供任何实验数据")
-    _validate_required_data(experiment.config, req.data)
     try:
         content = experiment.build_report(req.data, fmt)
     except Exception as exc:

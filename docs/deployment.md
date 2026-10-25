@@ -46,6 +46,16 @@ Cloudflare Containers 需要 Workers Paid 计划。部署前，如果使用自�
 
 PhysKiller 2.0 的匿名分析和 OCR 反馈默认写入容器临时目录中的 SQLite。若需要在自托管后端保留统计，应通过环境变量 `PHYSICSLAB_TELEMETRY_DB` 指向持久卷；不要把该数据库提交到 Git。默认 OCR provider 是 RapidOCR，只有在镜像额外安装 PaddleOCR 后才设置 `PHYSICSLAB_OCR_PROVIDER=paddleocr`。
 
+## MCP 不在部署范围内
+
+`backend/mcp_server.py` 与 `backend/physlab_mcp/` 是**本地**能力，只供开发者机器上的 AI 客户端（codex / opencode / CodeBuddy 等）通过 stdio 接入，不参与上云：
+
+- `backend/Dockerfile` 只打包 `app/`、`experiments/`、`record-sheets/`，镜像里没有 MCP 代码，也没有 MCP 启动命令；
+- `backend/.dockerignore` 把 `mcp_server.py`、`physlab_mcp/` 排除在构建上下文之外，将来若有人加回 `COPY` 只会在构建时报错，不会把代码送上去；
+- CloudBase / Oracle / Cloudflare 的部署配置都只启动 `uvicorn`，不为 MCP 开端口。
+
+接入与自检方式见 `docs/mcp.md`（本机执行 `npm run mcp:check`）。
+
 ## 本地验证
 
 ```bash
