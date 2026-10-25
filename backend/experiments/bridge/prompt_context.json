@@ -1,0 +1,98 @@
+{
+  "experimentId": "bridge",
+  "background": "本实验以直流/交流电桥为核心：先用平衡直流电桥测未知电阻并检验电桥灵敏度，再用卧式电桥配合铜电阻 Cu50 测温度（电阻–温度特性），最后用交流电桥分别测电容的容量与损耗、电感量与品质因数；选做部分用热敏电阻测温度系数 B 值。",
+  "methods": [
+    {
+      "id": "balanced",
+      "name": "平衡直流电桥",
+      "formulas": [
+        "R_x=\\frac{R_a}{R_b}R_n",
+        "R_x(t)=R_0(1+\\alpha t),\\quad R_0=50.0\\,\\Omega,\\ \\alpha=0.004280\\,\\mathrm{^{o}C^{-1}}",
+        "E_r=\\frac{|R_x-R_x(t)|}{R_x(t)}\\times100\\%"
+      ],
+      "criteria": [
+        "检流计指零时电桥平衡，此时 I_g≈0",
+        "反复微调 R_n 与 R_a/R_b 使灵敏度最高时平衡"
+      ],
+      "tips": [
+        "ra、rb、us、t_room 填入 params；rn 为平衡时的比较臂读数",
+        "每次改变比例臂后重新平衡，记录使检流计偏转最小的 rn",
+        "按电桥灵敏度选择电源电压，避免电阻发热漂移"
+      ]
+    },
+    {
+      "id": "cu50",
+      "name": "卧式电桥测 Cu50",
+      "formulas": [
+        "\\Delta R_x=\\frac{4R_nU_0}{U_s-2U_0},\\quad R_x=R_n+\\Delta R_x",
+        "R_x=R_0(1+\\alpha t),\\quad \\alpha=\\frac{k}{R_0}"
+      ],
+      "criteria": [
+        "U_0 为电桥失衡电压，随温度升高单调增大",
+        "由 R_x–t 直线斜率求得 α，与 0.00428 /℃ 比较"
+      ],
+      "tips": [
+        "us、rn 填入 params；temperature 与 u0 为每行的实测温度与失衡电压",
+        "升温过程中每个温度点等热平衡（读数稳定）后再记录",
+        "U_0 单位与记录纸一致（mV 或 V），不要中途换单位"
+      ]
+    },
+    {
+      "id": "capacitor",
+      "name": "交流电桥测电容",
+      "formulas": [
+        "C_x=\\frac{R_b}{R_a}C_n,\\quad r_C=\\frac{R_a}{R_b}R_n",
+        "\\tan\\delta=2\\pi fC_nR_n"
+      ],
+      "criteria": [
+        "交流指零仪指示最小时电桥平衡",
+        "损耗角 tanδ 应远小于 1（云母/聚苯乙烯电容）"
+      ],
+      "tips": [
+        "ra、rb、f 填入 params；cn、rn 为平衡时的标准电容与电阻读数",
+        "交流电桥必须同时调 C_n 与 R_n 才能收敛，先调衰减大的那一路",
+        "f 用信号源频率（Hz）严格记录"
+      ]
+    },
+    {
+      "id": "inductor",
+      "name": "交流电桥测电感",
+      "formulas": [
+        "L_x=R_aR_bC_n,\\quad r_L=\\frac{R_aR_b}{R_n}",
+        "Q=\\frac{\\omega L_x}{r_L}=\\omega C_nR_n"
+      ],
+      "criteria": [
+        "平衡时指零仪指示最小，Q 值通常在 1–50 量级",
+        "L_x 与标称值偏差应在 10% 以内"
+      ],
+      "tips": [
+        "ra、rb、f 填入 params；cn、rn 为平衡读数",
+        "电感线圈存在分布电容，高频下测量偏差增大，需在 remarks 说明频率影响"
+      ]
+    },
+    {
+      "id": "thermistor",
+      "name": "热敏电阻（选做）",
+      "formulas": [
+        "\\Delta R_x=\\frac{U_0(R_n+R^\\prime)^2}{U_sR^\\prime-U_0(R_n+R^\\prime)},\\quad R_x=R_n+\\Delta R_x",
+        "\\ln R=\\ln R_{25}+B\\left(\\frac{1}{T}-\\frac{1}{298.15}\\right)"
+      ],
+      "criteria": [
+        "lnR–1/T 应为直线，斜率即 B 值（约 3000–4000 K）",
+        "温度升高时电阻明显下降（NTC）"
+      ],
+      "tips": [
+        "us、r_prime、rn 填入 params；temperature 用热力学温度还是摄氏温度要与记录纸一致",
+        "热敏电阻升温后需等热平衡，升温过快会使曲线右移"
+      ]
+    }
+  ],
+  "commonMistakes": [
+    "检流计未调零或保护电阻未及时短接，导致平衡点判断偏差",
+    "比例臂选得过大/过小，电桥灵敏度过低",
+    "交流电桥只调一个元件就认为平衡",
+    "温度未达稳态就读取 U_0",
+    "把标准电容/电阻的倍率（μF、kΩ）漏乘"
+  ],
+  "recordSheet": "记录纸含：平衡电桥 rn 表（3 行）、Cu50 温度–失衡电压表（10 行）、电容/电感电桥表（各 3 行，含 Cn/Rn）、热敏电阻温度–U0 表（10 行）。"
+}

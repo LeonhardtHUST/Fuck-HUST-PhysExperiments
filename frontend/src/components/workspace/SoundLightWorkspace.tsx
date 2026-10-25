@@ -24,8 +24,13 @@ import {
 import { cn } from "@/lib/utils";
 import { getInputRange, isOutsideRange, rangeLabel, type InputRangeHint } from "@/lib/input-ranges";
 import DataInputTable from "@/components/workspace/DataInputTable";
+import ArtifactActions from "@/components/workspace/ArtifactActions";
+import ArtifactRemarks from "@/components/workspace/ArtifactRemarks";
 import { trimTrailingEmptyRows } from "@/components/workspace/table-rows";
 import DataContributionPanel from "@/components/workspace/DataContributionPanel";
+import { SOUND_LIGHT_LAYOUTS } from "@/lib/soundlight-layouts";
+import type { ArtifactInput } from "@/lib/experiment-artifact";
+import { mergeArtifactNotes, type ArtifactNotes, type DecodeOk } from "@/lib/artifact-scope";
 import { useDataCollection } from "@/hooks/useDataCollection";
 import { SOUND_LIGHT_WORKSPACE_STEPS } from "@/components/workspace/workspace-entry-flow";
 import soundLightConfig from "../../../../backend/experiments/soundlight/config.json";
@@ -74,136 +79,24 @@ interface MethodSpec {
   params: { key: string; label: string; unit: string; def: string; range?: InputRangeHint }[];
 }
 
-const METHOD_LAYOUTS: MethodSpec[] = [
-  // ── 实验一：超声声速测量 ──
-  {
-    id: "air_resonance",
-    name: "① 共振干涉法（空气）",
-    required: true,
-    desc: "实验一 · 必做。S2 同方向连续移动，默认记录 12 个驻波共振位置（相邻间距 ≈ λ/2，可自由增删，至少 4 个），逐差法求 Δl̄。",
-    tables: [
-      {
-        note: "温度用于理论声速修正 v = 331.45 × √(1 + t/273.15)",
-        rows: 12,
-        cols: [
-          { label: "序号", readOnly: true },
-          { label: "空气中共振法 l (mm)", key: "l" },
-        ],
-      },
-    ],
-    params: [
-      { key: "temperature_degC", label: "环境温度 t", unit: "°C", def: "25" },
-      { key: "f_khz", label: "共振频率 f", unit: "kHz", def: "38" },
-    ],
-  },
-  {
-    id: "water_phase",
-    name: "② 相位比较法（水）",
-    required: true,
-    desc: "实验一 · 必做。水中移动 S2 至李萨如为直线，默认记录 12 个相位匹配位置（与空气共用表 1-1，可自由增删，至少 4 个），逐差法处理并计算 A 类不确定度。",
-    tables: [
-      {
-        note: "频率约 1 MHz（以实际为准）",
-        rows: 12,
-        cols: [
-          { label: "序号", readOnly: true },
-          { label: "水中相位法 l (mm)", key: "l" },
-        ],
-      },
-    ],
-    params: [{ key: "f_mhz", label: "频率 f", unit: "MHz", def: "1" }],
-  },
-  {
-    id: "tof",
-    name: "③ 时差法 · 水",
-    required: false,
-    desc: "实验一 · 选做。脉冲波模式测水中声速：S2 每次移动等间距 20 mm，连续记录 12 组距离 L 与飞行时间 T，逐点 v = L/T。",
-    tables: [
-      {
-        note: "每次移动 20 mm，共 12 组",
-        rows: 12,
-        cols: [
-          { label: "序号", readOnly: true },
-          { label: "距离 L (mm)", key: "L" },
-          { label: "飞行时间 T (μs)", key: "T" },
-        ],
-      },
-    ],
-    params: [],
-  },
-  // ── 实验二：光速测量 ──
-  {
-    id: "light_sine",
-    name: "① 相位法（正弦波）",
-    required: true,
-    desc: "实验二 · 必做。差频正弦相位法：先测 3 组差频周期 T，再移动反射镜记录 3 组相位差 Δt 与位置 x₁→x₂（表 2-1 / 2-2）。",
-    tables: [
-      {
-        title: "表 2-1 周期测量",
-        rows: 3,
-        cols: [
-          { label: "序号", readOnly: true },
-          { label: "周期 T (μs)", key: "T" },
-        ],
-      },
-      {
-        title: "表 2-2 相位移动",
-        rows: 3,
-        cols: [
-          { label: "序号", readOnly: true },
-          { label: "相位差 Δt (μs)", key: "dt" },
-          { label: "x₁ (mm)", key: "x1" },
-          { label: "x₂ (mm)", key: "x2" },
-        ],
-      },
-    ],
-    params: [{ key: "f_mhz", label: "调制频率 f_t", unit: "MHz", def: "150" }],
-  },
-  {
-    id: "light_square",
-    name: "② 相位法（方波）",
-    required: false,
-    desc: "实验二 · 选做。示波器换方波挡位，方法与正弦波完全相同：同测差频周期 T 与 3 组相位差 Δt、x₁→x₂。",
-    tables: [
-      {
-        title: "周期测量",
-        rows: 3,
-        cols: [
-          { label: "序号", readOnly: true },
-          { label: "周期 T (μs)", key: "T" },
-        ],
-      },
-      {
-        title: "相位移动",
-        rows: 3,
-        cols: [
-          { label: "序号", readOnly: true },
-          { label: "相位差 Δt (μs)", key: "dt" },
-          { label: "x₁ (mm)", key: "x1" },
-          { label: "x₂ (mm)", key: "x2" },
-        ],
-      },
-    ],
-    params: [{ key: "f_mhz", label: "调制频率 f_t", unit: "MHz", def: "150" }],
-  },
-  {
-    id: "light_lissajous",
-    name: "③ 李萨如图形法",
-    required: true,
-    desc: "实验二 · 必做。X-Y 模式：反射镜从直线图形移动到反斜率直线（π 相位差，对应 Δx = λ/4），共 3 组（表 2-3）。",
-    tables: [
-      {
-        rows: 3,
-        cols: [
-          { label: "序号", readOnly: true },
-          { label: "x₁ (mm)", key: "x1" },
-          { label: "x₂ (mm)", key: "x2" },
-        ],
-      },
-    ],
-    params: [{ key: "f_mhz", label: "调制频率 f_t", unit: "MHz", def: "150" }],
-  },
-];
+const METHOD_LAYOUTS: MethodSpec[] = SOUND_LIGHT_LAYOUTS.map((layout) => ({
+  id: layout.id,
+  name: layout.name,
+  // 必做/选做、行数与单位均来自后端 config.json，布局文件只负责分组与列顺序。
+  required: false,
+  desc: layout.desc,
+  tables: layout.tables.map((table) => ({
+    title: table.title,
+    note: table.note,
+    rows: 1,
+    cols: table.cols.map((column) => ({
+      label: column.label,
+      key: column.key,
+      readOnly: column.readOnly,
+    })),
+  })),
+  params: [],
+}));
 
 interface SourceMethodConfig {
   id: string;
@@ -408,6 +301,7 @@ export default function SoundLightWorkspace() {
     >
   >({});
   const [currentResult, setCurrentResult] = useState<string | null>(null);
+  const [notes, setNotes] = useState<ArtifactNotes | null>(null);
 
   const spec = METHODS.find((m) => m.id === method)!;
 
@@ -433,6 +327,89 @@ export default function SoundLightWorkspace() {
       out[p.key] = cur[p.key] ?? p.def;
     });
     return out;
+  };
+
+  /** 行式快照 → artifact 的列式/行记录（序号列自动重建，不写入文件） */
+  const collectArtifact = (): ArtifactInput => {
+    const tables: ArtifactInput["tables"] = {};
+    METHODS.forEach((mspec) => {
+      const methodParams = getParams(mspec.id);
+      mspec.tables.forEach((table, ti) => {
+        const rows = dataRows(getRows(mspec.id, ti));
+        const dataCols = table.cols
+          .map((column, ci) => ({ column, ci }))
+          .filter(({ column }) => !column.readOnly && column.key);
+        tables[`${mspec.id}-${ti}`] = {
+          params: methodParams,
+          rows: rows.map((row) => {
+            const entry: Record<string, string> = {};
+            dataCols.forEach(({ column, ci }) => {
+              entry[column.key!] = row[ci] ?? "";
+            });
+            return entry;
+          }),
+          remarks: notes?.tableRemarks[`${mspec.id}-${ti}`],
+        };
+      });
+    });
+    return { tables, remarks: notes?.remarks ?? undefined, computed: notes?.computed };
+  };
+
+  const applyArtifact = (decoded: DecodeOk) => {
+    const touched = new Set<string>();
+    for (const table of decoded.tables) {
+      const separator = table.tableId.lastIndexOf("-");
+      const methodId = table.tableId.slice(0, separator);
+      const tableIndex = Number(table.tableId.slice(separator + 1));
+      const mspec = METHODS.find((item) => item.id === methodId);
+      const layout = mspec?.tables[tableIndex];
+      if (!mspec || !layout) continue;
+      const dataCols = layout.cols
+        .map((column, ci) => ({ column, ci }))
+        .filter(({ column }) => !column.readOnly && column.key);
+      const rowCount = Math.max(table.rows.length, layout.minRows ?? 1);
+      const grid = Array.from({ length: rowCount }, (_, rowIndex) => {
+        const row = Array.from({ length: layout.cols.length }, () => "");
+        row[0] = String(rowIndex + 1);
+        const imported = table.rows[rowIndex] ?? {};
+        dataCols.forEach(({ column, ci }) => {
+          row[ci] = imported[column.key!] ?? "";
+        });
+        return row;
+      });
+      setRows(methodId, tableIndex, grid);
+      const paramPatch: Record<string, string> = {};
+      Object.entries(table.params).forEach(([key, value]) => {
+        if (value === null || value === undefined) return;
+        paramPatch[key] = String(value);
+      });
+      if (Object.keys(paramPatch).length > 0) {
+        setParams((previous) => ({
+          ...previous,
+          [methodId]: { ...(previous[methodId] ?? {}), ...paramPatch },
+        }));
+      }
+      touched.add(methodId);
+    }
+    if (touched.size > 0) {
+      setProcessed((previous) => {
+        const next = { ...previous };
+        touched.forEach((methodId) => delete next[methodId]);
+        return next;
+      });
+      if (currentResult && touched.has(currentResult)) setCurrentResult(null);
+    }
+    setNotes((previous) => mergeArtifactNotes(previous, decoded));
+    setError(null);
+  };
+
+  const clearTableNotes = (tableId: string) => {
+    setNotes((previous) => {
+      if (!previous) return previous;
+      const tableRemarks = { ...previous.tableRemarks };
+      delete tableRemarks[tableId];
+      return { ...previous, tableRemarks };
+    });
   };
 
   const buildPayload = useCallback(
@@ -644,6 +621,19 @@ export default function SoundLightWorkspace() {
               </p>
             </div>
 
+            <div className="mb-4 flex flex-wrap justify-end">
+              <ArtifactActions
+                experimentId={EXP_ID}
+                scope={{ kind: "experiment" }}
+                collect={collectArtifact}
+                onImport={applyArtifact}
+                remarks={notes?.remarks}
+                tableRemarks={notes?.tableRemarks}
+                computed={notes?.computed}
+                onClearRemarks={() => setNotes(null)}
+              />
+            </div>
+
             <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-stone-200 bg-stone-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-bold text-stone-800">需要纸质记录表？</p>
@@ -682,6 +672,24 @@ export default function SoundLightWorkspace() {
             )}
 
             <DataContributionPanel collection={collection} />
+
+            {notes && (
+              <ArtifactRemarks
+                scope="experiment"
+                remarks={notes.remarks}
+                computed={notes.computed}
+                tableLabels={Object.fromEntries(
+                  METHODS.flatMap((item) =>
+                    item.tables.map((table, ti) => [
+                      `${item.id}-${ti}`,
+                      table.title ? `${item.name} · ${table.title}` : item.name,
+                    ])
+                  )
+                )}
+                onClear={() => setNotes(null)}
+                className="mb-6"
+              />
+            )}
 
             {/* method selector */}
             <div className="mb-6 flex flex-wrap gap-2" role="tablist" aria-label="测量方法">
@@ -851,10 +859,36 @@ export default function SoundLightWorkspace() {
                       ocr={{ experimentId: EXP_ID, tableId: `${method}-${ti}` }}
                       resizable
                       minRows={table.minRows ?? 1}
+                      actions={
+                        <ArtifactActions
+                          experimentId={EXP_ID}
+                          scope={{
+                            kind: "table",
+                            tableId: `${method}-${ti}`,
+                            title: table.title ? `${spec.name} · ${table.title}` : spec.name,
+                          }}
+                          collect={collectArtifact}
+                          onImport={applyArtifact}
+                          tableRemarks={notes?.tableRemarks}
+                          onClearRemarks={() => clearTableNotes(`${method}-${ti}`)}
+                          variant="table"
+                        />
+                      }
                     />
                     <p className="mt-2 text-[11px] leading-relaxed text-stone-400">
                       默认 {table.rows} 行（讲义推荐），可自由增删；至少 {table.minRows ?? 1} 行才能计算。
                     </p>
+                    {notes?.tableRemarks[`${method}-${ti}`] && (
+                      <ArtifactRemarks
+                        scope="table"
+                        remarks={notes.tableRemarks[`${method}-${ti}`]}
+                        columns={table.cols
+                          .filter((column) => column.key)
+                          .map((column) => ({ key: column.key!, label: column.label }))}
+                        onClear={() => clearTableNotes(`${method}-${ti}`)}
+                        className="mt-3"
+                      />
+                    )}
                   </div>
                 ))}
               </div>

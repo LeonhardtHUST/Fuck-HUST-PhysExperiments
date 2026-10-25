@@ -1,0 +1,65 @@
+{
+  "experimentId": "gmr",
+  "background": "巨磁电阻（GMR）效应指磁性多层膜的电阻在外磁场中显著下降。本实验用亥姆霍兹线圈提供可调磁场：先测 GMR 传感器的磁电转换特性（输出电压随激励电流/磁场变化，含磁滞），再直接测内部磁阻随磁场的变化求 GMR 比值，最后把传感器做成无接触电流传感器，标定输出与导线电流的关系（选做）。",
+  "methods": [
+    {
+      "id": "transfer",
+      "name": "磁电转换特性",
+      "formulas": [
+        "B(\\mathrm{Gs})=0.31416\\,I(\\mathrm{mA})",
+        "V_{out}=k_\\pm B+b_\\pm",
+        "k=\\frac{|k_+|+|k_-|}{2},\\quad \\Delta V_{hys}=|b_+-b_-|"
+      ],
+      "criteria": [
+        "正、反两个扫场方向各作一条直线，两条直线的截距差即磁滞",
+        "|k| 反映灵敏度（V/Gs），方向由 direction 列区分"
+      ],
+      "tips": [
+        "excitation 为激励电流（mA），output 为传感器输出（V 或 mV，按记录纸）",
+        "direction 区分正向/反向扫场（如 +1/-1），同一方向内激励电流应单调变化",
+        "扫场到端点后先归零再反向，避免磁滞叠加"
+      ]
+    },
+    {
+      "id": "resistance",
+      "name": "内部磁阻特性",
+      "formulas": [
+        "R=\\frac{2U}{I_R}",
+        "GMR=\\frac{R_{\\max}-R_{\\min}}{R_{\\min}}\\times100\\%"
+      ],
+      "criteria": [
+        "R 随磁场增大而下降，高场区趋于饱和",
+        "GMR 比值一般为百分之几到十几",
+        "ir_a、ir_b 两路电流应基本一致，差异大说明接线或量程有问题"
+      ],
+      "tips": [
+        "excitation 为激励电流（mA），ir_a/ir_b 为两条支路电流（mA），supply 填入供电参数",
+        "R 由 2U/I_R 得到，注意 U 与 I_R 的单位配套",
+        "测量前先给传感器退磁（激励电流归零）"
+      ]
+    },
+    {
+      "id": "current_sensor",
+      "name": "无接触电流测量（选做）",
+      "formulas": [
+        "V_{out}=kI+b"
+      ],
+      "criteria": [
+        "两种供电（2.5 V / 10 V 或记录纸标注）下输出与导线电流应线性相关",
+        "灵敏度不同但线性度应接近"
+      ],
+      "tips": [
+        "current 为导线电流（A），output25/output100 为对应供电电压下的输出",
+        "传感器应贴近导线且方向固定，位置变化会明显改变输出"
+      ]
+    }
+  ],
+  "commonMistakes": [
+    "激励电流方向未记录，正反向数据混在一列",
+    "扫场过程中途反向导致磁滞回线不闭合",
+    "传感器供电电压接错（2.5 V 与 10 V 混用）",
+    "导线与传感器相对位置在测量中移动",
+    "未退磁就开始测磁阻曲线"
+  ],
+  "recordSheet": "记录纸含：磁电转换特性表（42 行，excitation/output/direction）、内部磁阻表（42 行，excitation/ir_a/ir_b）、电流传感器表（11 行，current/output25/output100）。"
+}

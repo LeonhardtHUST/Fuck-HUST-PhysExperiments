@@ -35,6 +35,12 @@ import {
   type ProcessResponse,
 } from "@/lib/api";
 import DataInputTable from "@/components/workspace/DataInputTable";
+import ArtifactActions from "@/components/workspace/ArtifactActions";
+import ArtifactRemarks from "@/components/workspace/ArtifactRemarks";
+import { rowIndexValue } from "@/lib/table-specs";
+import { getExperimentSpec } from "@/lib/experiment-specs";
+import type { ArtifactInput } from "@/lib/experiment-artifact";
+import { mergeArtifactNotes, type ArtifactNotes, type DecodeOk } from "@/lib/artifact-scope";
 import { trimTrailingEmptyRows } from "@/components/workspace/table-rows";
 import DataContributionPanel from "@/components/workspace/DataContributionPanel";
 import SoundLightWorkspace from "@/components/workspace/SoundLightWorkspace";
@@ -60,6 +66,9 @@ const SUB_ICON: Record<string, React.ElementType> = {
   quarterwave: Waves,
   circular: Orbit,
 };
+
+/** 偏振光的表头/只读角度规则与 artifact 共用同一份声明式定义。 */
+const POLARIZATION_SPEC = getExperimentSpec("polarization");
 
 function numberOrNull(value: string): number | null {
   if (value.trim() === "") return null;
@@ -119,6 +128,7 @@ function PolarizationWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [dlError, setDlError] = useState<string | null>(null);
+  const [notes, setNotes] = useState<ArtifactNotes | null>(null);
 
   const runDownload = async (key: string, action: () => Promise<void>) => {
     if (busyKey) return;
@@ -186,6 +196,93 @@ function PolarizationWorkspace({
     await collection.commit(data);
   };
 
+  const collectArtifact = (): ArtifactInput => {
+    const trim = (rows: string[][], keep: number) =>
+      trimTrailingEmptyRows(rows, { keep, ignoreColumns: [0] });
+    return {
+      setupParams: { bg_uw: bgUw, theta_qwp: thetaQwp },
+      tables: {
+        malus: {
+          rows: trim(malusData, 2).map((row) => ({
+            theta: row[0],
+            i_left: row[1] ?? "",
+            i_right: row[2] ?? "",
+          })),
+          remarks: notes?.tableRemarks.malus,
+        },
+        halfwave: {
+          params: hwInit,
+          rows: trim(hwData, 2).map((row) => ({
+            offset: row[0],
+            c_deg: row[1] ?? "",
+            c_min: row[2] ?? "",
+            p2_deg: row[3] ?? "",
+            p2_min: row[4] ?? "",
+          })),
+          remarks: notes?.tableRemarks.halfwave,
+        },
+        quarterwave: {
+          rows: trim(qwData, 3).map((row) => ({ phi: row[0], i_raw: row[1] ?? "" })),
+          remarks: notes?.tableRemarks.quarterwave,
+        },
+        circular: {
+          rows: trim(circData, 3).map((row) => ({ angle: row[0], i_raw: row[1] ?? "" })),
+          remarks: notes?.tableRemarks.circular,
+        },
+      },
+      remarks: notes?.remarks ?? undefined,
+      computed: notes?.computed,
+    };
+  };
+
+  /** 只读角度列按行序重建（与 onAddRow 的规则一致），避免行序与角度错位。 */
+  const applyArtifact = (decoded: DecodeOk) => {
+    for (const table of decoded.tables) {
+      const specTable = POLARIZATION_SPEC.tables.find((item) => item.tableId === table.tableId);
+      if (!specTable) continue;
+      const rowCount = Math.max(table.rows.length, specTable.minRows);
+      const next = Array.from({ length: rowCount }, (_, rowIndex) => {
+        const imported = table.rows[rowIndex] ?? {};
+        return specTable.columns.map((column) => {
+          const derived = rowIndexValue(column, rowIndex);
+          if (derived !== undefined) return String(derived);
+          const value = imported[column.key];
+          return value === null || value === undefined ? "" : String(value);
+        });
+      });
+      if (table.tableId === "malus") setMalusData(next);
+      else if (table.tableId === "halfwave") setHwData(next);
+      else if (table.tableId === "quarterwave") setQwData(next);
+      else if (table.tableId === "circular") setCircData(next);
+
+      if (table.tableId === "halfwave") {
+        const patch: Partial<typeof hwInit> = {};
+        (["c_deg", "c_min", "p2_deg", "p2_min"] as const).forEach((key) => {
+          const value = table.params[key];
+          if (value !== undefined && value !== null) patch[key] = String(value);
+        });
+        if (Object.keys(patch).length > 0) setHwInit((previous) => ({ ...previous, ...patch }));
+      }
+    }
+
+    const setup = decoded.setupParams ?? {};
+    if (setup.bg_uw !== undefined && setup.bg_uw !== null) setBgUw(String(setup.bg_uw));
+    if (setup.theta_qwp !== undefined && setup.theta_qwp !== null) setThetaQwp(String(setup.theta_qwp));
+
+    setNotes((previous) => mergeArtifactNotes(previous, decoded));
+    setResult(null);
+    setError(null);
+  };
+
+  const clearTableNotes = (tableId: string) => {
+    setNotes((previous) => {
+      if (!previous) return previous;
+      const tableRemarks = { ...previous.tableRemarks };
+      delete tableRemarks[tableId];
+      return { ...previous, tableRemarks };
+    });
+  };
+
   // ---- derived fill stats (same per-sub heuristics as submission) ----
   const fills = {
     malus: malusData.filter((r) => r[1] || r[2]).length,
@@ -229,6 +326,33 @@ function PolarizationWorkspace({
   }
 
   const currentStepIndex = STEPS.findIndex((s) => s.id === step);
+  const polarTable = (tableId: string) => POLARIZATION_SPEC.tables.find((table) => table.tableId === tableId);
+
+  const tableActions = (tableId: string) => (
+    <ArtifactActions
+      experimentId={experiment.id}
+      scope={{ kind: "table", tableId, title: polarTable(tableId)?.title ?? tableId }}
+      collect={collectArtifact}
+      onImport={applyArtifact}
+      tableRemarks={notes?.tableRemarks}
+      onClearRemarks={() => clearTableNotes(tableId)}
+      variant="table"
+    />
+  );
+
+  const tableNotes = (tableId: string) => {
+    const remarks = notes?.tableRemarks[tableId];
+    if (!remarks) return null;
+    return (
+      <ArtifactRemarks
+        scope="table"
+        remarks={remarks}
+        columns={polarTable(tableId)?.columns}
+        onClear={() => clearTableNotes(tableId)}
+        className="mt-3"
+      />
+    );
+  };
 
   const handleProcess = async () => {
     setLoading(true);
@@ -394,6 +518,19 @@ function PolarizationWorkspace({
               </p>
             </div>
 
+            <div className="mb-4 flex flex-wrap justify-end">
+              <ArtifactActions
+                experimentId={experiment.id}
+                scope={{ kind: "experiment" }}
+                collect={collectArtifact}
+                onImport={applyArtifact}
+                remarks={notes?.remarks}
+                tableRemarks={notes?.tableRemarks}
+                computed={notes?.computed}
+                onClearRemarks={() => setNotes(null)}
+              />
+            </div>
+
             <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-stone-200 bg-stone-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-bold text-stone-800">需要纸质记录表？</p>
@@ -432,6 +569,19 @@ function PolarizationWorkspace({
             )}
 
             <DataContributionPanel collection={collection} />
+
+            {notes && (
+              <ArtifactRemarks
+                scope="experiment"
+                remarks={notes.remarks}
+                computed={notes.computed}
+                tableLabels={Object.fromEntries(
+                  POLARIZATION_SPEC.tables.map((table) => [table.tableId, table.title])
+                )}
+                onClear={() => setNotes(null)}
+                className="mb-6"
+              />
+            )}
 
             {/* Setup params */}
             <div className="card mb-6 flex flex-col gap-5 p-6 shadow-soft sm:flex-row sm:items-center sm:justify-between">
@@ -540,7 +690,9 @@ function PolarizationWorkspace({
                   resizable
                   minRows={2}
                   onAddRow={addMalusRow}
+                  actions={tableActions("malus")}
                 />
+                {tableNotes("malus")}
               </div>
             )}
 
@@ -596,7 +748,9 @@ function PolarizationWorkspace({
                   resizable
                   minRows={2}
                   onAddRow={(rows) => addAngleRow(rows, 10, 0)}
+                  actions={tableActions("halfwave")}
                 />
+                {tableNotes("halfwave")}
               </div>
             )}
 
@@ -617,7 +771,9 @@ function PolarizationWorkspace({
                   resizable
                   minRows={3}
                   onAddRow={(rows) => addAngleRow(rows, 10, 0)}
+                  actions={tableActions("quarterwave")}
                 />
+                {tableNotes("quarterwave")}
               </div>
             )}
 
@@ -638,7 +794,9 @@ function PolarizationWorkspace({
                   resizable
                   minRows={3}
                   onAddRow={(rows) => addAngleRow(rows, 10, 0)}
+                  actions={tableActions("circular")}
                 />
+                {tableNotes("circular")}
               </div>
             )}
 

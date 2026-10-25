@@ -1,0 +1,116 @@
+{
+  "experimentId": "sound-light",
+  "background": "本实验分两部分。实验一声速测量：用信号发生器驱动超声波换能器 S1，移动接收换能器 S2，分别用空气中共振干涉法（驻波共振）、水中相位比较法（李萨如图为直线）和时差法（脉冲飞行时间）测声速，并与温度修正后的理论声速比较。实验二光速测量：用约 150 MHz 的调制光，通过差频后示波器测量调制波周期 T 与反射镜移动引起的相位差 Δt 或李萨如相位变化，间接得到调制波长 λ，再由 c=fλ 求光速。",
+  "methods": [
+    {
+      "id": "air_resonance",
+      "name": "空气中共振法测声速",
+      "formulas": [
+        "\\Delta l_i=\\frac{l_{i+6}-l_i}{6},\\quad \\overline{\\Delta l}=\\frac{1}{6}\\sum_{i=1}^{6}\\Delta l_i",
+        "\\lambda=2\\overline{\\Delta l},\\quad v=f\\lambda",
+        "v_t=331.45\\sqrt{1+\\frac{t}{273.15}}"
+      ],
+      "criteria": [
+        "相邻共振位置间距约为 λ/2（38 kHz 时约 4.5 mm）",
+        "共振时示波器上接收信号幅值最大"
+      ],
+      "tips": [
+        "S2 必须沿同一方向连续移动，避免回程差",
+        "室温 t（℃）与共振频率 f（kHz）填入 params，f 以频率计读数为准",
+        "记录 12 个位置便于逐差；不足 12 个时至少 4 个（成对逐差）"
+      ]
+    },
+    {
+      "id": "water_phase",
+      "name": "水中相位比较法测声速",
+      "formulas": [
+        "\\Delta l_i=\\frac{l_{i+6}-l_i}{6},\\quad \\lambda=2\\overline{\\Delta l},\\quad v=f\\lambda",
+        "s(\\Delta l)=\\sqrt{\\frac{\\sum(\\Delta l_i-\\overline{\\Delta l})^2}{k-1}},\\quad U_A=\\frac{t_{0.95}(k-1)\\,s}{\\sqrt{k}}",
+        "U_A(v)=2f\\,U_A(\\Delta l)"
+      ],
+      "criteria": [
+        "X-Y 模式下李萨如图为直线（相位差 0 或 π）时读数",
+        "相邻匹配位置间距约 λ/2（水中 1 MHz 时约 0.74 mm）"
+      ],
+      "tips": [
+        "水中超声频率 f（MHz）填入 params",
+        "换能器入水深度保持一致，避免水面反射干扰",
+        "直线图形出现两个方向（正斜率/负斜率），按同一判据（如相位差 0）连续记录"
+      ]
+    },
+    {
+      "id": "tof",
+      "name": "时差法测水中声速（选做）",
+      "formulas": [
+        "v_i=\\frac{L}{T}=1000\\times\\frac{L(\\mathrm{mm})}{T(\\mathrm{\\mu s})}\\ (\\mathrm{m/s})",
+        "v=\\frac{1}{n}\\sum_i v_i；L\\text{-}T 图斜率 a\\ (\\mathrm{\\mu s/mm})，\\quad v=\\frac{1000}{a}"
+      ],
+      "criteria": [
+        "L–T 应为直线，相关系数接近 1",
+        "逐点速度与 1480 m/s 的偏差应在合理范围"
+      ],
+      "tips": [
+        "S2 每次移动 20 mm，起点约 40 mm，共 12 组",
+        "T 为发射脉冲与接收脉冲前沿的时间间隔（μs），读同一相位点",
+        "脉冲模式下注意触发稳定，必要时调触发电平"
+      ]
+    },
+    {
+      "id": "light_sine",
+      "name": "相位法测光速（正弦波）",
+      "formulas": [
+        "\\Delta x_i=|x_{2,i}-x_{1,i}|,\\quad r_i=\\frac{\\Delta x_i}{\\Delta t_i},\\quad \\bar r=\\frac{1}{n}\\sum_i r_i",
+        "\\lambda=2\\bar T\\,\\bar r,\\quad c=f\\lambda"
+      ],
+      "criteria": [
+        "3 组 Δx/Δt 的离散度应较小（相对偏差 < 10%）",
+        "c 与 2.998×10^8 m/s 的偏差通常在 5% 以内"
+      ],
+      "tips": [
+        "周期 T 用 0.5 μs/DIV 时基读一周格数，重复 3 次取平均（表 2-1）",
+        "相位差 Δt 用 0.2 μs/DIV 读两路信号同相位点的时间差；同时记录 x1、x2（表 2-2）",
+        "调制频率 f（MHz）填入 params，以频率计读数为准；c_ref 仅在界面需要时填写"
+      ]
+    },
+    {
+      "id": "light_square",
+      "name": "相位法测光速（方波，选做）",
+      "formulas": [
+        "\\lambda=2\\bar T\\,\\bar r,\\quad c=f\\lambda,\\quad r_i=\\frac{|x_{2,i}-x_{1,i}|}{\\Delta t_i}"
+      ],
+      "criteria": [
+        "方波与正弦波两组结果应一致（差异在不确定度内）"
+      ],
+      "tips": [
+        "示波器输入耦合与触发方式切换到方波挡后重新确认周期读数",
+        "其余读数方法与正弦波相同"
+      ]
+    },
+    {
+      "id": "light_lissajous",
+      "name": "李萨如图形法测光速",
+      "formulas": [
+        "\\Delta x_i=|x_{2,i}-x_{1,i}|,\\quad \\overline{\\Delta x}=\\frac{1}{n}\\sum_i\\Delta x_i",
+        "\\lambda=4\\overline{\\Delta x},\\quad c=f\\lambda"
+      ],
+      "criteria": [
+        "图形从直线（斜率 +k）移动到反斜率直线（−k）对应相位差 π，位移为 λ/4",
+        "3 组 Δx 的离散度应较小"
+      ],
+      "tips": [
+        "X-Y 模式下亮度调低、余辉关掉，便于判断直线",
+        "两次读数之间反射镜只能沿同一方向移动",
+        "调制频率 f（MHz）填入 params"
+      ]
+    }
+  ],
+  "commonMistakes": [
+    "移动 S2 时中途反向，引入回程差",
+    "共振点判据不统一（有的取幅值最大、有的取最小值）",
+    "示波器时基/偏转因子记错，导致 T、Δt 换算错误一个量级",
+    "读数时未等波形稳定，或未关掉示波器的平均/余辉功能",
+    "频率以刻度代替频率计读数，使 c 或 v 系统性偏移",
+    "声速实验未记录室温，无法做温度修正"
+  ],
+  "recordSheet": "记录纸包含：表 1 空气中共振位置 l（12 行）+ 室温/频率；表 2 水中相位匹配位置 l（12 行）+ 频率；表 3 时差法 L/T（12 行）；表 2-1 差频周期 T（3 行）；表 2-2 相位差 Δt 与 x1/x2（3 行）；表 2-3 李萨如 x1/x2（3 行）。"
+}

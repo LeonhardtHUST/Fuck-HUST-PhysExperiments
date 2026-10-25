@@ -1,0 +1,109 @@
+{
+  "experimentId": "multimeter",
+  "background": "本实验用标准电源/电阻箱作为基准，逐档校准自制万用表的直流电压、直流电流、电阻档（以及交流电压、交流电流选做档）：在每个设定值下记录万用表读数，作校准曲线 U_meas=kU_set+b，用斜率 k 判断倍率误差、截距 b 判断零点偏移，并用未知电阻测量检验整表准确度。",
+  "methods": [
+    {
+      "id": "voltage",
+      "name": "直流电压档校准",
+      "formulas": [
+        "\\Delta U_i=U_{\\mathrm{meas},i}-U_{\\mathrm{set},i}",
+        "U_{\\mathrm{meas}}=kU_{\\mathrm{set}}+b"
+      ],
+      "criteria": [
+        "校准曲线应接近 k=1、b=0；|b| 反映零点偏移，|k-1| 反映倍率误差",
+        "相邻设定点的读数应单调递增，无明显跳变"
+      ],
+      "tips": [
+        "set 为标准电源读数、measured 为万用表读数，两者单位一致（V）",
+        "每换一个量程重新调零；读数取稳定后的值",
+        "至少覆盖 5 个设定点，靠近满量程处必须有数据"
+      ]
+    },
+    {
+      "id": "current",
+      "name": "直流电流档校准",
+      "formulas": [
+        "\\Delta I_i=I_{\\mathrm{meas},i}-I_{\\mathrm{set},i}",
+        "I_{\\mathrm{meas}}=kI_{\\mathrm{set}}+b"
+      ],
+      "criteria": [
+        "k 接近 1、b 接近 0",
+        "同一设定值下重复读数极差应小于最小分度"
+      ],
+      "tips": [
+        "单位 mA（或按记录纸标注），不要混用 A 与 mA",
+        "电流档内阻会改变回路电流，标准表与自制表应串联在同一回路"
+      ]
+    },
+    {
+      "id": "resistance",
+      "name": "电阻档校准",
+      "formulas": [
+        "\\Delta R_i=R_{\\mathrm{meas},i}-R_{\\mathrm{set},i}",
+        "R_{\\mathrm{meas}}=kR_{\\mathrm{set}}+b"
+      ],
+      "criteria": [
+        "低阻段误差通常小于高阻段",
+        "曲线截距 b 反映表笔与接触电阻"
+      ],
+      "tips": [
+        "先短接表笔读零点电阻（接触电阻），必要时从读数中扣除",
+        "换档后重新调零；电阻箱取值与万用表量程匹配"
+      ]
+    },
+    {
+      "id": "unknown",
+      "name": "未知电阻测量",
+      "formulas": [
+        "\\varepsilon_r=\\frac{|\\overline{R}_{\\mathrm{meas}}-\\overline{R}_{\\mathrm{ref}}|}{\\overline{R}_{\\mathrm{ref}}}\\times100\\%"
+      ],
+      "criteria": [
+        "多次测量的相对误差应在仪表准确度等级允许范围内",
+        "参考值与测量值的有效数字位数要匹配"
+      ],
+      "tips": [
+        "reference 为标称/参考值，measured 为自制表读数（Ω）",
+        "至少测 3 次并取平均，避免只取一次读数"
+      ]
+    },
+    {
+      "id": "ac_voltage",
+      "name": "交流电压档校准（选做）",
+      "formulas": [
+        "\\Delta U_i=U_{\\mathrm{meas},i}-U_{\\mathrm{set},i}",
+        "U_{\\mathrm{meas}}=kU_{\\mathrm{set}}+b"
+      ],
+      "criteria": [
+        "交流档需确认读数是有效值；k 应接近 1",
+        "频率偏离 50 Hz 时读数会系统性偏低"
+      ],
+      "tips": [
+        "记录交流信号频率（若记录纸有），否则在 remarks 说明",
+        "与直流档对比，评估整流电路的非线性"
+      ]
+    },
+    {
+      "id": "ac_current",
+      "name": "交流电流档校准（选做）",
+      "formulas": [
+        "\\Delta I_i=I_{\\mathrm{meas},i}-I_{\\mathrm{set},i}",
+        "I_{\\mathrm{meas}}=kI_{\\mathrm{set}}+b"
+      ],
+      "criteria": [
+        "k 接近 1、b 接近 0（在小电流段 b 的相对影响更大）"
+      ],
+      "tips": [
+        "与交流电压档使用同一信号源频率",
+        "小电流读数易受环境干扰，可多次读数取平均"
+      ]
+    }
+  ],
+  "commonMistakes": [
+    "量程选错导致读数超量程或分辨率不足",
+    "换档后未重新调零，整组数据带固定偏移",
+    "把标准表读数与自制表读数写反",
+    "电流档并联接入回路（应串联）",
+    "电阻档带电测量，读数严重偏小"
+  ],
+  "recordSheet": "记录纸为各档校准表（设定值–万用表读数，每档约 21 行）+ 未知电阻表（参考值–测量值 3 行）。"
+}

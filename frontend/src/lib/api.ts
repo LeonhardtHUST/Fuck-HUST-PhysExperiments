@@ -1,3 +1,5 @@
+import { downloadBlob } from "./clipboard";
+
 // An empty value is intentional for the same-origin Oracle deployment.
 // Nullish fallback keeps local development pointed at the standalone API.
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001";
@@ -307,15 +309,8 @@ const EXP_CN: Record<string, string> = {
   michelson: "迈克尔逊干涉实验",
 };
 
-function triggerDownload(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
+export function triggerDownload(blob: Blob, filename: string) {
+  downloadBlob(blob, filename);
 }
 
 export async function downloadRecordSheet(

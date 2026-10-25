@@ -25,6 +25,8 @@ interface Props {
   minRows?: number;
   /** 自定义“添加一行”的行内容（缺省按表头列数补空行，首列自动编号） */
   onAddRow?: (rows: string[][]) => string[][];
+  /** 底部工具条右侧的附加操作（导出/导入/Schema），未传时保持原有渲染 */
+  actions?: React.ReactNode;
 }
 
 export default function DataInputTable({
@@ -36,6 +38,7 @@ export default function DataInputTable({
   resizable,
   minRows = 1,
   onAddRow,
+  actions,
 }: Props) {
   const inputRefs = useRef<(HTMLInputElement | null)[][]>([]);
   const autoIndexColumn = headers[0]?.readOnly ? 0 : undefined;
@@ -162,6 +165,16 @@ export default function DataInputTable({
     });
     onChange(next);
   };
+
+  const addRowButton = (
+    <button
+      type="button"
+      onClick={addRow}
+      className="rounded-md border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-600 transition-colors hover:border-indigo-300 hover:text-indigo-700"
+    >
+      + 添加一行
+    </button>
+  );
 
   return (
     <>
@@ -298,19 +311,27 @@ export default function DataInputTable({
           </tbody>
         </table>
       </div>
-      {resizable && (
-        <div className="flex items-center justify-between gap-3 border-t border-stone-100 bg-stone-50/60 px-4 py-2">
-          <button
-            type="button"
-            onClick={addRow}
-            className="rounded-md border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-600 transition-colors hover:border-indigo-300 hover:text-indigo-700"
-          >
-            + 添加一行
-          </button>
-          <span className="text-[11px] text-stone-400">
-            共 {data.length} 行 · 至少 {Math.max(1, minRows)} 行，可自由增删
-          </span>
+      {actions ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 bg-stone-50/60 px-4 py-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {resizable && addRowButton}
+            {actions}
+          </div>
+          {resizable && (
+            <span className="text-[11px] text-stone-400">
+              共 {data.length} 行 · 至少 {Math.max(1, minRows)} 行，可自由增删
+            </span>
+          )}
         </div>
+      ) : (
+        resizable && (
+          <div className="flex items-center justify-between gap-3 border-t border-stone-100 bg-stone-50/60 px-4 py-2">
+            {addRowButton}
+            <span className="text-[11px] text-stone-400">
+              共 {data.length} 行 · 至少 {Math.max(1, minRows)} 行，可自由增删
+            </span>
+          </div>
+        )
       )}
     </div>
     </>

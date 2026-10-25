@@ -149,6 +149,56 @@ PhysLab 负责采集与切分，[PhysLab_OCR](https://github.com/Bogger111/PhysL
 
 ## 本地运行（开发者）
 
+### 一键脚本
+
+仓库根目录带一个 `package.json`，用 npm 脚本即可启动/构建，跨平台（Windows / macOS / Linux）：
+
+| 命令 | 作用 |
+|---|---|
+| `npm run dev` | 开发模式：后端 `uvicorn --reload` + 前端 `next dev`，改代码即时生效 |
+| `npm run build` | 只构建前端（`next build` 静态导出到 `frontend/out`） |
+| `npm run prod` | 先构建，再以**生产产物**启动（后端不带 `--reload` + 静态服务器），页面不再实时渲染，明显更流畅 |
+| `npm run stop` | 停掉占用 8001 / 3000 的进程 |
+
+`npm run dev` 只是转发到下面的脚本；需要细粒度参数时直接用脚本：
+
+```bash
+npm run prod -- --no-browser --detach     # 构建 + 后台生产模式，不弹浏览器
+```
+
+脚本：`scripts/dev.ps1`（Windows PowerShell 5.1 / PowerShell 7）与 `scripts/dev.sh`（bash）。默认**独占当前控制台**运行：日志实时打印、`Ctrl+C` 同时停掉前后端；加 `-Detach` / `--detach` 转后台。
+
+| 环境 | 前台启动 | 后台启动 | 停止 |
+|---|---|---|---|
+| Windows PowerShell 5.1 | `.\scripts\dev.ps1` | `.\scripts\dev.ps1 -Detach` | `.\scripts\dev.ps1 -Stop` |
+| PowerShell 7（pwsh） | `pwsh -File .\scripts\dev.ps1` | `pwsh -File .\scripts\dev.ps1 -Detach` | `pwsh -File .\scripts\dev.ps1 -Stop` |
+| Git Bash / Linux / macOS | `./scripts/dev.sh` | `./scripts/dev.sh --detach` | `./scripts/dev.sh --stop` |
+
+参数：
+
+| PowerShell | bash | 作用 |
+|---|---|---|
+| `-Build` | `--build` | 只构建前端（导出到 `frontend/out`）后退出 |
+| `-Prod` | `--prod` | 先构建，再用生产产物启动前后端 |
+| `-Install` | `--install` | 强制重装 Python 与 npm 依赖 |
+| `-Detach` | `--detach` | 转入后台运行，日志写入 `.dev-logs/` |
+| `-Stop` | `--stop` | 停止占用这两个端口的进程后退出 |
+| `-NoBrowser` | `--no-browser` | 不自动打开浏览器 |
+| `-BackendPort` | `-b, --backend-port` | 后端端口，默认 8001 |
+| `-FrontendPort` | `-f, --frontend-port` | 前端端口，默认 3000 |
+
+脚本做的事：首次运行创建 `.venv` 并安装 `backend/requirements.txt`、`frontend/` 执行 `npm ci`；清理端口后启动后端与前端，轮询 `/health` 和首页直到就绪（各 180 秒上限），失败会提示看日志。
+
+- 开发模式：前端 <http://localhost:3000>（`next dev`，热更新）；生产模式：同一个地址，服务的是 `frontend/out` 静态产物，适合演示与验收。
+- 后端始终是 <http://127.0.0.1:8001>（API 文档 `/docs`）；前端通过 `next.config.ts` 的 rewrite 把 `/api/*` 代理过去，两种模式一致。
+- `npm run prod` 每次都会重新构建；只想看页面就反复用同一个 `prod` 命令即可（构建约 20 秒）。
+- 前台模式按 `Ctrl+C` 停止；后台模式用 `-Stop` / `--stop`，日志见 `.dev-logs/`（已被 `.gitignore` 覆盖）。
+- PowerShell 报「禁止运行脚本」时：`powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1`。
+- Windows 上跑 bash 版本请用 Git Bash（`.venv/Scripts/python.exe` 与 `.venv/bin/python` 脚本会自行识别）。
+- 生产模式的静态服务器是仓库自带的零依赖脚本 `scripts/serve-static.mjs`（等价于 CI 上的静态托管：目录补 `/` 重定向、`index.html` 落盘、404 页面）。
+
+### 手动启动
+
 ```bash
 # 后端
 cd backend && pip install -r requirements.txt

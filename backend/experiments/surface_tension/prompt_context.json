@@ -1,0 +1,97 @@
+{
+  "experimentId": "surface-tension",
+  "background": "液体表面张力使液面趋于收缩。本实验先用砝码对力敏传感器定标（U–mg 线性关系求灵敏度 K），再用拉脱法测吊环从液面拉起时的最大拉力差，求表面张力系数 σ；另用毛细管法由管内液柱上升高度与管径计算 σ，并与参考值比较。拓展部分研究盐水浓度对 σ 的影响。",
+  "methods": [
+    {
+      "id": "calibration",
+      "name": "力敏传感器定标",
+      "formulas": [
+        "F=mg,\\quad U=KF+b"
+      ],
+      "criteria": [
+        "U–mg 应为直线，相关系数接近 1",
+        "灵敏度 K 的单位为 mV/N（或 V/N，以记录纸为准）"
+      ],
+      "tips": [
+        "mass 为砝码质量（g），u_up/u_down 为加载/卸载时电压（mV）",
+        "逐片加砝码再逐片取下，取往返平均可减小迟滞",
+        "g 取 9.794 m/s²（武汉地区），填入 params"
+      ]
+    },
+    {
+      "id": "pull_off",
+      "name": "拉脱法",
+      "formulas": [
+        "\\sigma=\\frac{|U_1-U_2|}{\\pi(D_1+D_2)K}",
+        "\\Delta\\sigma=|\\sigma-\\sigma_0|,\\quad E_r=\\frac{|\\sigma-\\sigma_0|}{\\sigma_0}\\times100\\%"
+      ],
+      "criteria": [
+        "拉脱瞬间电压出现明显峰值（U1 为液面接触时、U2 为拉断前）",
+        "σ 与参考值 σ0（约 72 mN/m，随温度变化）偏差通常在 10% 以内"
+      ],
+      "tips": [
+        "u1/u2 为同一组拉脱过程的两个电压读数（mV），取多次测量的平均",
+        "params 中 d1/d2 为吊环内外径（mm 或 cm，与公式单位一致）、sigma_reference 为参考值",
+        "吊环必须水平、洁净、完全润湿；液面不能有泡沫",
+        "拉脱过程要缓慢匀速，避免振动"
+      ]
+    },
+    {
+      "id": "capillary",
+      "name": "毛细管法",
+      "formulas": [
+        "h=|y_1-y_2|,\\quad d=|x_1-x_2|",
+        "\\sigma=\\frac{1}{4}\\rho gd\\left(h+\\frac{d}{6}\\right)",
+        "\\Delta\\sigma=|\\sigma-\\sigma_0|,\\quad E_r=\\frac{|\\sigma-\\sigma_0|}{\\sigma_0}\\times100\\%"
+      ],
+      "criteria": [
+        "毛细管内液面上升高度与管径成反比（h∝1/d）",
+        "σ 与拉脱法结果应一致（差异在不确定度内）"
+      ],
+      "tips": [
+        "y1/y2 为液面与管内液柱顶端读数（mm），x1/x2 为毛细管外径两端读数，相减得 h、d",
+        "params 中 density（kg/m³）、g、sigma_reference",
+        "毛细管必须竖直插入且内壁洁净，否则液面呈弯月异常",
+        "读数时视线与液面最低点平齐"
+      ]
+    },
+    {
+      "id": "salt_pull_off",
+      "name": "盐水表面张力·拉脱法（拓展选做）",
+      "formulas": [
+        "\\sigma=\\frac{|U_1-U_2|}{\\pi(D_1+D_2)K}"
+      ],
+      "criteria": [
+        "盐水 σ 一般低于纯水，且随浓度升高而下降",
+        "同浓度多次测量的离散度应较小"
+      ],
+      "tips": [
+        "concentration 为盐水质量分数（%）；sensitivity 为定标得到的 K",
+        "每次换浓度后冲洗吊环并擦干"
+      ]
+    },
+    {
+      "id": "salt_capillary",
+      "name": "盐水表面张力·毛细管法（拓展选做）",
+      "formulas": [
+        "\\sigma=\\frac{1}{4}\\rho gd\\left(h+\\frac{d}{6}\\right)"
+      ],
+      "criteria": [
+        "与同浓度拉脱法结果一致",
+        "盐水密度随浓度变化，必须使用实测密度"
+      ],
+      "tips": [
+        "concentration 为质量分数、density 为实测密度（kg/m³）",
+        "毛细管换液前需用待测液润洗"
+      ]
+    }
+  ],
+  "commonMistakes": [
+    "吊环未调水平或未完全润湿，拉脱力明显偏小",
+    "把拉脱峰值当作液面接触读数，U2 取错",
+    "传感器未预热/漂移，定标曲线截距很大",
+    "毛细管倾斜或内壁有油污，液柱高度异常",
+    "盐水密度用纯水密度代替"
+  ],
+  "recordSheet": "记录纸含：定标表（8 行 mass/u_up/u_down）、纯水拉脱表（5 行 u1/u2）、毛细管表（5 行 y1/y2/x1/x2）、盐水拉脱与毛细管表（各 5 行）。"
+}

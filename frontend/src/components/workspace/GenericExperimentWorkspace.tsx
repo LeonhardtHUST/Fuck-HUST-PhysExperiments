@@ -31,6 +31,10 @@ import { cn } from "@/lib/utils";
 import { getInputRange, isOutsideRange, rangeLabel } from "@/lib/input-ranges";
 import OcrTableImporter from "./OcrTableImporter";
 import DataContributionPanel from "./DataContributionPanel";
+import ArtifactActions from "./ArtifactActions";
+import ArtifactRemarks from "./ArtifactRemarks";
+import type { ArtifactInput } from "@/lib/experiment-artifact";
+import { mergeArtifactNotes, type ArtifactNotes, type DecodeOk } from "@/lib/artifact-scope";
 import { useDataCollection } from "@/hooks/useDataCollection";
 import {
   appendDraftRow,
@@ -96,6 +100,7 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notes, setNotes] = useState<ArtifactNotes | null>(null);
   const inputRefs = useRef<(HTMLInputElement | null)[][]>([]);
 
   useEffect(() => {
@@ -136,6 +141,63 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
       }];
     }));
   }, [config, draft]);
+
+  /** Snapshot for artifact export: strings stay strings so the schema shapes the file. */
+  const collectArtifact = useCallback((): ArtifactInput => {
+    if (!config) return { tables: {} };
+    return {
+      tables: Object.fromEntries(
+        config.methods.map((method) => [
+          method.id,
+          {
+            rows: draft[method.id]?.rows ?? [],
+            params: draft[method.id]?.params ?? {},
+            remarks: notes?.tableRemarks[method.id],
+          },
+        ])
+      ),
+      remarks: notes?.remarks ?? undefined,
+      computed: notes?.computed,
+    };
+  }, [config, draft, notes]);
+
+  const applyArtifact = (decoded: DecodeOk) => {
+    if (!config) return;
+    setDraft((previous) => {
+      const next = { ...previous };
+      for (const table of decoded.tables) {
+        const method = config.methods.find((item) => item.id === table.tableId);
+        const source = previous[table.tableId];
+        if (!method || !source) continue;
+        const rowCount = Math.max(table.rows.length, method.minRows ?? 1);
+        const rows = Array.from({ length: rowCount }, (_, index) => {
+          const imported = table.rows[index] ?? {};
+          return Object.fromEntries(
+            method.columns.map((column) => [column.key, imported[column.key] ?? ""])
+          );
+        });
+        const params = { ...source.params };
+        for (const parameter of method.params ?? []) {
+          const value = table.params[parameter.key];
+          if (value !== undefined) params[parameter.key] = value;
+        }
+        next[table.tableId] = { params, rows };
+      }
+      return next;
+    });
+    setNotes((previous) => mergeArtifactNotes(previous, decoded));
+    setResult(null);
+    setError(null);
+  };
+
+  const clearTableNotes = (tableId: string) => {
+    setNotes((previous) => {
+      if (!previous) return previous;
+      const tableRemarks = { ...previous.tableRemarks };
+      delete tableRemarks[tableId];
+      return { ...previous, tableRemarks };
+    });
+  };
 
   const current = useMemo(() => config?.methods.find((method) => method.id === active), [config, active]);
   const completionMethods = useMemo<CompletionMethod[]>(
@@ -272,10 +334,31 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
         <div className="flex flex-wrap gap-2">
           <button onClick={() => act("preview", () => previewRecordSheet(id))} disabled={!!busy} className="inline-flex h-10 items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 disabled:opacity-50"><FileText className="h-4 w-4" />预览记录表</button>
           <button onClick={() => act("record", () => downloadRecordSheet("docx", id))} disabled={!!busy} className="inline-flex h-10 items-center gap-2 rounded-xl bg-stone-900 px-4 text-sm font-semibold text-white disabled:opacity-50"><FileDown className="h-4 w-4" />记录表 Word</button>
+          <ArtifactActions
+            experimentId={id}
+            scope={{ kind: "experiment" }}
+            collect={collectArtifact}
+            onImport={applyArtifact}
+            remarks={notes?.remarks}
+            tableRemarks={notes?.tableRemarks}
+            computed={notes?.computed}
+            onClearRemarks={() => setNotes(null)}
+          />
         </div>
       </div>
 
       <DataContributionPanel collection={collection} />
+
+      {notes && (
+        <ArtifactRemarks
+          scope="experiment"
+          remarks={notes.remarks}
+          computed={notes.computed}
+          tableLabels={Object.fromEntries(config.methods.map((method) => [method.id, method.name]))}
+          onClear={() => setNotes(null)}
+          className="mb-6"
+        />
+      )}
 
       <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
         {config.methods.map((method, index) => (
@@ -377,19 +460,39 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
               </tbody>
             </table>
             </div>
-            <div className="flex items-center justify-between gap-3 border-t border-stone-100 bg-stone-50/60 px-4 py-2">
-              <button
-                type="button"
-                onClick={() => addRow(current.id)}
-                className="rounded-md border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-600 transition-colors hover:border-indigo-300 hover:text-indigo-700"
-              >
-                + 添加一行
-              </button>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 bg-stone-50/60 px-4 py-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => addRow(current.id)}
+                  className="rounded-md border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-600 transition-colors hover:border-indigo-300 hover:text-indigo-700"
+                >
+                  + 添加一行
+                </button>
+                <ArtifactActions
+                  experimentId={id}
+                  scope={{ kind: "table", tableId: current.id, title: current.name }}
+                  collect={collectArtifact}
+                  onImport={applyArtifact}
+                  tableRemarks={notes?.tableRemarks}
+                  onClearRemarks={() => clearTableNotes(current.id)}
+                  variant="table"
+                />
+              </div>
               <span className="text-[11px] text-stone-400">
                 共 {draft[current.id]?.rows.length ?? 0} 行 · 默认 {current.rowCount} 行，至少 {current.minRows ?? 1} 行，可自由增删
               </span>
             </div>
           </div>
+          {notes?.tableRemarks[current.id] && (
+            <ArtifactRemarks
+              scope="table"
+              remarks={notes.tableRemarks[current.id]}
+              columns={current.columns.map((column) => ({ key: column.key, label: column.label }))}
+              onClear={() => clearTableNotes(current.id)}
+              className="mt-4"
+            />
+          )}
         </div>
       </section>
 
@@ -413,7 +516,7 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => { setDraft(makeDraft(config)); setResult(null); setError(null); }} className="inline-flex h-10 items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-600"><RotateCcw className="h-4 w-4" />清空</button>
+          <button onClick={() => { setDraft(makeDraft(config)); setResult(null); setError(null); setNotes(null); }} className="inline-flex h-10 items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-600"><RotateCcw className="h-4 w-4" />清空</button>
           <button
             onClick={process}
             disabled={!!busy}

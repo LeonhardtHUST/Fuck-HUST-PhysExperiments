@@ -20,3 +20,6 @@ backend/data_collection/
 backend/datasets/
 datasets/
 *.sqlite3
+
+# CodeBuddy workspace metadata (local plans/session files, never tracked):
+.codebuddy/
