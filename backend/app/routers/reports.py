@@ -55,14 +55,16 @@ def _validate_required_data(config: dict, data: Dict[str, Dict[str, Any]]) -> No
         submitted = data.get(method["id"])
         rows = submitted.get("rows", []) if submitted else []
         columns = [column["key"] for column in method.get("columns", [])]
-        expected_rows = method.get("rowCount", 0)
+        # 行数可自由增删：只要求达到计算下限（rowCount 仅是讲义推荐条数），
+        # 且已提交的每一行都填完整
+        min_rows = max(1, int(method.get("minRows") or 1))
         params = submitted.get("params", {}) if submitted else {}
         required_params = [parameter["key"] for parameter in method.get("params", [])
                            if parameter.get("required")]
         complete = (
-            len(rows) >= expected_rows
+            len(rows) >= min_rows
             and all(row.get(key) not in (None, "")
-                    for row in rows[:expected_rows] for key in columns)
+                    for row in rows for key in columns)
             # 现场实测的参数（如卧式电桥的预平衡 Rn）缺一不可，否则该方法的公式根本无法反解
             and all(params.get(key) not in (None, "") for key in required_params)
         )

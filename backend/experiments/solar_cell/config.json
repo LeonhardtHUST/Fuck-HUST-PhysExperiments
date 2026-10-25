@@ -16,6 +16,7 @@
       "required": true,
       "description": "确定最大功率点和填充因子",
       "rowCount": 16,
+      "minRows": 3,
       "params": [
         {
           "key": "isc",
@@ -91,6 +92,7 @@
       "required": true,
       "description": "比较七种遮挡工况短路电流",
       "rowCount": 7,
+      "minRows": 3,
       "columns": [
         {
           "key": "condition",
@@ -133,6 +135,7 @@
       "required": true,
       "description": "记录直接充电 P-t",
       "rowCount": 12,
+      "minRows": 2,
       "columns": [
         {
           "key": "time",
@@ -174,6 +177,7 @@
       "required": true,
       "description": "记录 DC-DC 充电 P-t",
       "rowCount": 12,
+      "minRows": 2,
       "columns": [
         {
           "key": "time",
@@ -215,6 +219,7 @@
       "required": true,
       "description": "比较并联电容前后工作点",
       "rowCount": 2,
+      "minRows": 2,
       "columns": [
         {
           "key": "voltage",
@@ -246,6 +251,7 @@
       "required": false,
       "description": "比较接入 DC-DC 前后负载获得的功率",
       "rowCount": 1,
+      "minRows": 1,
       "columns": [
         {
           "key": "voltage_before",
@@ -292,6 +298,7 @@
       "required": false,
       "description": "记录逆变器输入工况与节能灯点亮现象",
       "rowCount": 1,
+      "minRows": 1,
       "columns": [
         {
           "key": "input_voltage",

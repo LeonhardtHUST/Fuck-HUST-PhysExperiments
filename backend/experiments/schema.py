@@ -260,6 +260,8 @@ def enrich_config(raw: dict[str, Any]) -> dict[str, Any]:
         method.setdefault("validation", {})
         method["validation"].setdefault("finiteNumbers", True)
         method["validation"].setdefault("expectedRangeIsWarning", True)
+        # rowCount 是讲义推荐行数（前端默认渲染），minRows 是计算下限
+        method.setdefault("minRows", 1)
         method["columns"] = [
             _field_dict(config["id"], method["id"], field,
                         required=bool(field.get("required", True)))
@@ -346,6 +348,12 @@ def validate_payload(config: dict[str, Any], data: dict[str, Any]) -> dict[str, 
         payload = data.get(method_id) or {}
         rows = payload.get("rows") or []
         fields = method.get("columns", [])
+        # 行数可自由增删，但仍需达到该方法的计算下限（未填写时交给完整性检查）
+        min_rows = int(method.get("minRows") or 1)
+        if rows and len(rows) < min_rows:
+            errors.append(asdict(ExperimentValidationIssue(
+                method_id, "", None, "error", "min_rows",
+                f"{method['name']}：至少需要 {min_rows} 行数据，实际收到 {len(rows)} 行")))
         for row_index, row in enumerate(rows):
             if not isinstance(row, dict):
                 errors.append(asdict(ExperimentValidationIssue(

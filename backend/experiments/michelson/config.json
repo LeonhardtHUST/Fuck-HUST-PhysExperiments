@@ -14,8 +14,9 @@
       "id": "wavelength",
       "name": "He-Ne 激光波长测量",
       "required": true,
-      "description": "10 点单向读数、隔 5 档逐差",
+      "description": "默认 10 点单向读数（可自由增删，至少 4 点）、隔 k=n/2 档逐差",
       "rowCount": 10,
+      "minRows": 4,
       "params": [
         {
           "key": "fringes_per_step",
@@ -79,6 +80,7 @@
       "required": true,
       "description": "三行依次记录未扩束激光、扩束激光和钠灯扩展光源",
       "rowCount": 3,
+      "minRows": 2,
       "columns": [
         {
           "key": "setup_code",

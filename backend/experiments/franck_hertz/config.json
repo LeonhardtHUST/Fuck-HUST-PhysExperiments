@@ -16,6 +16,7 @@
       "required": true,
       "description": "0~4 V 每 1 V，4 V 后每 0.5 V，测至 60 V",
       "rowCount": 117,
+      "minRows": 3,
       "params": [
         {
           "key": "temperature",
@@ -194,6 +195,7 @@
       "required": true,
       "description": "以峰间距计算第一激发电位",
       "rowCount": 6,
+      "minRows": 3,
       "columns": [
         {
           "key": "peak_voltage",
@@ -225,6 +227,7 @@
       "required": false,
       "description": "自行改变炉温、拒斥电压或灯丝电压，记录对比曲线",
       "rowCount": 30,
+      "minRows": 3,
       "params": [
         {
           "key": "temperature",
@@ -287,6 +290,7 @@
       "required": false,
       "description": "炉温降至 100~135 °C 后记录 IP-UKG1 曲线",
       "rowCount": 30,
+      "minRows": 3,
       "params": [
         {
           "key": "temperature",

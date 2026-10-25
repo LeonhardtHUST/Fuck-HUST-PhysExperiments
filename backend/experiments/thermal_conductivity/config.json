@@ -16,6 +16,7 @@
       "required": true,
       "description": "铜盘和样品盘尺寸平均",
       "rowCount": 5,
+      "minRows": 2,
       "columns": [
         {
           "key": "dc",
@@ -67,6 +68,7 @@
       "required": true,
       "description": "记录 TA、TC 并确定稳态 T1、T2",
       "rowCount": 15,
+      "minRows": 3,
       "columns": [
         {
           "key": "time",
@@ -108,6 +110,7 @@
       "required": true,
       "description": "拟合 T2 附近冷却速率并计算 λ",
       "rowCount": 16,
+      "minRows": 3,
       "params": [
         {
           "key": "mass",

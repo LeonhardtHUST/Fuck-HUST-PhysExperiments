@@ -16,6 +16,7 @@
       "required": true,
       "description": "按方向列分增磁/减磁两支各自拟合（两支差异＝磁滞），灵敏度取两支 |斜率| 平均",
       "rowCount": 42,
+      "minRows": 4,
       "columns": [
         {
           "key": "excitation",
@@ -162,6 +163,7 @@
       "required": true,
       "description": "增磁、减磁各 21 点，反解两种接线状态电阻并计算 GMR",
       "rowCount": 42,
+      "minRows": 2,
       "params": [
         {
           "key": "supply",
@@ -257,6 +259,7 @@
       "required": false,
       "description": "Vout-I 标定",
       "rowCount": 11,
+      "minRows": 3,
       "columns": [
         {
           "key": "current",

@@ -79,8 +79,10 @@ def test_calibration_methods_show_the_scale_they_measure():
 
 def test_ranges_are_still_warnings_not_blocks():
     """The polish must not turn a hint into a validation error."""
+    # 行数达到该方法的最小值（2 行），确保这里检验的只是“范围提示不升级为错误”
     response = CLIENT.post("/api/experiments/multimeter/validate", json={
-        "data": {"voltage": {"rows": [{"set": 9999, "measured": 9999}], "params": {}}},
+        "data": {"voltage": {"rows": [{"set": 9999, "measured": 9999},
+                                       {"set": 9999, "measured": 9999}], "params": {}}},
     })
     assert response.status_code == 200, response.text
     body = response.json()

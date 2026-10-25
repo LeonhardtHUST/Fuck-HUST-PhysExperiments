@@ -16,6 +16,7 @@
       "required": true,
       "description": "由三个方向坐标差求平均直径",
       "rowCount": 3,
+      "minRows": 2,
       "columns": [
         {
           "key": "x1",
@@ -47,6 +48,7 @@
       "required": true,
       "description": "计算 η、Re 与 Oseen 修正",
       "rowCount": 5,
+      "minRows": 2,
       "params": [
         {
           "key": "distance",
@@ -145,6 +147,7 @@
       "required": false,
       "description": "同一温度下至少选择两个不同规格小球，比较 η 与 Re",
       "rowCount": 3,
+      "minRows": 2,
       "params": [
         {
           "key": "distance",

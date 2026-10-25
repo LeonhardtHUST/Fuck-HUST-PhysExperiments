@@ -16,6 +16,7 @@
       "required": true,
       "description": "200 mV 档校准曲线",
       "rowCount": 21,
+      "minRows": 2,
       "columns": [
         {
           "key": "set",
@@ -82,6 +83,7 @@
       "required": true,
       "description": "20 mA 档校准曲线",
       "rowCount": 21,
+      "minRows": 2,
       "columns": [
         {
           "key": "set",
@@ -148,6 +150,7 @@
       "required": true,
       "description": "2 kΩ 档校准曲线",
       "rowCount": 21,
+      "minRows": 2,
       "columns": [
         {
           "key": "set",
@@ -214,6 +217,7 @@
       "required": true,
       "description": "组装表与标准表结果比较",
       "rowCount": 3,
+      "minRows": 1,
       "columns": [
         {
           "key": "reference",
@@ -250,6 +254,7 @@
       "required": false,
       "description": "200 mV 交流电压档校准",
       "rowCount": 21,
+      "minRows": 2,
       "columns": [
         {
           "key": "set",
@@ -316,6 +321,7 @@
       "required": false,
       "description": "20 mA 交流电流档校准",
       "rowCount": 21,
+      "minRows": 2,
       "columns": [
         {
           "key": "set",

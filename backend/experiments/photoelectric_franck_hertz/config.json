@@ -19,6 +19,7 @@
       "required": true,
       "description": "拟合 US-ν",
       "rowCount": 5,
+      "minRows": 2,
       "columns": [
         {
           "key": "wavelength",
@@ -90,6 +91,7 @@
       "required": true,
       "description": "Φ=2 mm；按讲义在 -4~0 V、0~15 V、15~30 V 分段取点",
       "rowCount": 34,
+      "minRows": 2,
       "columns": [
         {
           "key": "voltage",
@@ -160,6 +162,7 @@
       "required": true,
       "description": "Φ=4 mm；按讲义在 -4~0 V、0~15 V、15~30 V 分段取点",
       "rowCount": 34,
+      "minRows": 2,
       "columns": [
         {
           "key": "voltage",
@@ -230,6 +233,7 @@
       "required": true,
       "description": "验证 Im 与 Φ² 正比",
       "rowCount": 6,
+      "minRows": 4,
       "columns": [
         {
           "key": "wavelength",
@@ -295,6 +299,7 @@
       "required": false,
       "description": "任选一个光阑，每个频率至少重复测量 3 次",
       "rowCount": 5,
+      "minRows": 2,
       "params": [
         {
           "key": "aperture",
@@ -369,6 +374,7 @@
       "required": true,
       "description": "0~4 V 每 1 V，4 V 后每 0.5 V，测至 60 V",
       "rowCount": 117,
+      "minRows": 3,
       "params": [
         {
           "key": "temperature",
@@ -548,6 +554,7 @@
       "required": true,
       "description": "以峰间距计算第一激发电位",
       "rowCount": 6,
+      "minRows": 3,
       "columns": [
         {
           "key": "peak_voltage",
@@ -580,6 +587,7 @@
       "required": false,
       "description": "自行改变炉温、拒斥电压或灯丝电压，记录对比曲线",
       "rowCount": 30,
+      "minRows": 3,
       "params": [
         {
           "key": "temperature",
@@ -643,6 +651,7 @@
       "required": false,
       "description": "炉温降至 100~135 °C 后记录 IP-UKG1 曲线",
       "rowCount": 30,
+      "minRows": 3,
       "params": [
         {
           "key": "temperature",

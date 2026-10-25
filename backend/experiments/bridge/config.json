@@ -16,6 +16,7 @@
       "required": true,
       "description": "测 Cu50 室温电阻，与室温理论值 50(1+0.004280t) 比较算相对误差",
       "rowCount": 3,
+      "minRows": 2,
       "params": [
         {
           "key": "ra",
@@ -73,6 +74,7 @@
       "required": true,
       "description": "卧式电桥严格反解 ΔRx=4Rn·U0/(Us-2U0) 后拟合 R-t 求 R0 与 α",
       "rowCount": 10,
+      "minRows": 2,
       "monotonic": {
         "field": "temperature",
         "direction": "increasing"
@@ -138,6 +140,7 @@
       "required": true,
       "description": "维恩电桥平衡式反算 Cx、损耗电阻 rC 与 tanδ",
       "rowCount": 3,
+      "minRows": 2,
       "params": [
         {
           "key": "ra",
@@ -194,6 +197,7 @@
       "required": true,
       "description": "麦克斯韦电桥平衡式反算 Lx、线圈电阻 rL 与品质因数 Q",
       "rowCount": 3,
+      "minRows": 2,
       "params": [
         {
           "key": "ra",
@@ -250,6 +254,7 @@
       "required": false,
       "description": "立式电桥反解阻值，做 R-t 与 lnR-1/T 曲线并拟合材料常数 B",
       "rowCount": 10,
+      "minRows": 2,
       "monotonic": {
         "field": "temperature",
         "direction": "increasing"

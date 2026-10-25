@@ -342,6 +342,57 @@ def test_photoelectric_iv_wavelengths_share_one_combined_plot():
     assert len(matching_images) == 1
 
 
+def test_michelson_accepts_eight_rows_with_four_progressive_differences():
+    """行数可自由增删：8 个读数 → k=4 组逐差，波长结果与 10 点一致。"""
+    data = {"wavelength": _payload([
+        {"fringe_count": 50 * (i + 1), "position": 10 + .01582 * i}
+        for i in range(8)
+    ], fringes_per_step=50)}
+    run = process_experiment("michelson", data)
+    assert run["status"] == "success", run.get("errors")
+    assert run["results"]["wavelength"]["groups"] == 4
+    assert run["results"]["wavelength"]["wavelength"] == pytest.approx(632.8)
+    assert len(run["derived"]["wavelength"]) == 4
+
+
+def test_michelson_too_few_rows_reports_the_minimum_not_a_crash():
+    data = {"wavelength": _payload([
+        {"fringe_count": 50 * (i + 1), "position": 10 + .01582 * i} for i in range(2)
+    ], fringes_per_step=50)}
+    run = process_experiment("michelson", data)
+    assert run["status"] == "validation_error"
+    assert any("至少需要" in str(error) for error in run["errors"])
+
+
+def test_general_schema_exposes_default_and_min_rows_for_resizable_tables():
+    client = TestClient(app)
+    definition = client.get("/api/experiments/michelson/schema").json()["definition"]
+    method = next(item for item in definition["methods"] if item["id"] == "wavelength")
+    assert method["rowCount"] == 10  # 讲义默认行数
+    assert method["minRows"] == 4    # 计算下限（可增删到 4 行）
+
+    too_short = client.post("/api/experiments/michelson/validate", json={"data": {
+        "wavelength": {"rows": [{"fringe_count": 50, "position": 10}], "params": {}}
+    }}).json()
+    assert too_short["valid"] is False
+    assert any("至少需要 4 行数据" in item["message"] for item in too_short["errors"])
+
+
+@pytest.mark.document
+def test_report_raw_table_follows_submitted_rows_and_blank_stays_lecture_default():
+    config = next(item for item in CONFIGS if item["id"] == "michelson")
+    method = next(item for item in config["methods"] if item["id"] == "wavelength")
+    payload = _payload([
+        {"fringe_count": 50 * (i + 1), "position": 10 + .01582 * i} for i in range(8)
+    ], fringes_per_step=50)
+
+    report_table = docs._method_raw_table(method, payload)
+    blank_table = docs._method_raw_table(method, {}, blank=True)
+
+    assert len(report_table["rows"]) == 8 + 1  # header + 实际录入行数
+    assert len(blank_table["rows"]) == method["rowCount"] + 1  # 空白模板仍是讲义条数
+
+
 @pytest.mark.document
 def test_report_raw_table_trims_only_trailing_blank_template_rows():
     config = next(item for item in CONFIGS if item["id"] == "franck-hertz")

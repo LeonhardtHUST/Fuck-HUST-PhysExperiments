@@ -80,8 +80,9 @@ class PolarizationExperiment:
         if payload.get("quarterwave"):
             rows = payload["quarterwave"].get("rows", [])
             filled = sum(1 for row in rows if row.get("i_raw") is not None)
-            if filled < 10:
-                validation_errors.append(f"四分之一波片: 需要至少10个有效光强数据，当前仅有 {filled} 个")
+            # 行数可自由增删：只要求达到拟合所需的最少点数（讲义推荐 36 点）
+            if filled < 3:
+                validation_errors.append(f"四分之一波片: 至少需要 3 个有效光强数据，当前仅有 {filled} 个")
             data["quarterwave"] = {"rows": rows}
 
         if payload.get("circular"):

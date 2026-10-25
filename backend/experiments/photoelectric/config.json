@@ -16,6 +16,7 @@
       "required": true,
       "description": "拟合 US-ν",
       "rowCount": 5,
+      "minRows": 2,
       "columns": [
         {
           "key": "wavelength",
@@ -86,6 +87,7 @@
       "required": true,
       "description": "Φ=2 mm；按讲义在 -4~0 V、0~15 V、15~30 V 分段取点",
       "rowCount": 34,
+      "minRows": 2,
       "columns": [
         {
           "key": "voltage",
@@ -155,6 +157,7 @@
       "required": true,
       "description": "Φ=4 mm；按讲义在 -4~0 V、0~15 V、15~30 V 分段取点",
       "rowCount": 34,
+      "minRows": 2,
       "columns": [
         {
           "key": "voltage",
@@ -224,6 +227,7 @@
       "required": true,
       "description": "验证 Im 与 Φ² 正比",
       "rowCount": 6,
+      "minRows": 4,
       "columns": [
         {
           "key": "wavelength",
@@ -288,6 +292,7 @@
       "required": false,
       "description": "任选一个光阑，每个频率至少重复测量 3 次",
       "rowCount": 5,
+      "minRows": 2,
       "params": [
         {
           "key": "aperture",

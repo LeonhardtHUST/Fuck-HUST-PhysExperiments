@@ -39,10 +39,19 @@ def calculate(method, rows, p):
         try: wl=float(row["wavelength"]); d=float(row["diameter"]); currents=[float(row[k]) for k in ("i1","i2","i3") if row.get(k) not in (None,"")]
         except (ValueError,TypeError,KeyError): continue
         if currents: vals.append((wl,d,_mean(currents)))
+    if len(vals)<2: raise ValueError(f"饱和光电流至少需要 2 行数据（当前 {len(vals)} 行）")
     result={}; derived=[]; series=[]
-    for wl in (436,546):
-        group=[v for v in vals if v[0]==wl]; x=[v[1]**2 for v in group]; y=[v[2] for v in group]; f=_fit(x,y); result[f"r_squared_{wl}"]=f["r_squared"]; series.append((y,f"{wl} nm", "#2563eb" if wl==436 else "#f59e0b")); derived += [{"wavelength":wl,"phi_squared":a,"i_mean":b} for a,b in zip(x,y)]
+    # 两波长的 Φ² 取值可能不同（行数可自由增删），绘图按并集 x 对齐，缺失点留空
     x=sorted({v[1]**2 for v in vals})
+    for wl in (436,546):
+        group=[v for v in vals if v[0]==wl]
+        if len(group)<2:
+            raise ValueError(f"饱和光电流：{wl} nm 至少需要 2 行数据（当前 {len(group)} 行）")
+        gx=[v[1]**2 for v in group]; gy=[v[2] for v in group]
+        f=_fit(gx,gy); result[f"r_squared_{wl}"]=f["r_squared"]
+        by_x={a:b for a,b in zip(gx,gy)}
+        series.append(([by_x.get(xv,math.nan) for xv in x],f"{wl} nm", "#2563eb" if wl==436 else "#f59e0b"))
+        derived += [{"wavelength":wl,"phi_squared":a,"i_mean":b} for a,b in zip(gx,gy)]
     return result,derived,_plot(x,series,"Φ² / mm²","Im","饱和光电流与相对光强",True)
 
 def _photoelectric_iv_plot(data: dict) -> str | None:

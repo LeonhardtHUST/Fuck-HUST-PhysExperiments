@@ -20,15 +20,18 @@ def calculate(method, rows, p):
         vals=numbers(rows,"pattern_code","motion_code")
         return {"observed_rows":len(vals)},[],None
     pos=[v[0] for v in numbers(rows,"position")]
-    if len(pos)<10: raise ValueError("逐差法需要 10 个连续位置读数")
+    # 行数可自由增删：n 个读数取 k=n//2 组逐差（n=10 → k=5，与讲义“隔 5 档”一致）
+    k=len(pos)//2
+    if k<2: raise ValueError(f"逐差法至少需要 4 个位置读数（当前 {len(pos)} 个）")
     dif=np.diff(pos)
     if not (np.all(dif>0) or np.all(dif<0)): raise ValueError("鼓轮读数必须保持单向变化，避免机械空程差")
-    deltas=[abs(pos[i+5]-pos[i]) for i in range(5)]; fringes=p.get("fringes_per_step",50)*5; average=mean(deltas); wavelength=2*average/fringes*1e6
-    return {"wavelength":wavelength,"relative_error":abs(wavelength-632.8)/632.8*100,"delta_d_mean":average,"delta_d_std":std(deltas)},[{"group":i+1,"delta_d":v,"wavelength":2*v/fringes*1e6} for i,v in enumerate(deltas)],plot(list(range(1,6)),[(deltas,"逐差位移","#2563eb")],"逐差组","Δd / mm","迈克尔逊逐差结果")
+    deltas=[abs(pos[i+k]-pos[i]) for i in range(k)]
+    fringes=p.get("fringes_per_step",50)*k; average=mean(deltas); wavelength=2*average/fringes*1e6
+    return {"wavelength":wavelength,"relative_error":abs(wavelength-632.8)/632.8*100,"delta_d_mean":average,"delta_d_std":std(deltas),"groups":k},[{"group":i+1,"delta_d":v,"wavelength":2*v/fringes*1e6} for i,v in enumerate(deltas)],plot(list(range(1,k+1)),[(deltas,"逐差位移","#2563eb")],"逐差组","Δd / mm","迈克尔逊逐差结果")
 
 
 FORMULAS = {
-    "wavelength": [r"\Delta d_i=|d_{i+5}-d_i|", r"\lambda=\frac{2\overline{\Delta d}}{250}=\frac{\overline{\Delta d}}{125}"],
+    "wavelength": [r"\Delta d_i=|d_{i+k}-d_i|", r"\lambda=\frac{2\overline{\Delta d}}{N_{fg}k}"],
 }
 
 

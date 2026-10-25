@@ -16,6 +16,7 @@
       "required": true,
       "description": "拟合 U-F 求灵敏度 K",
       "rowCount": 8,
+      "minRows": 2,
       "params": [
         {
           "key": "g",
@@ -77,6 +78,7 @@
       "required": true,
       "description": "自动使用定标所得 K，由破膜电压差求表面张力并与纯水标准值比较",
       "rowCount": 5,
+      "minRows": 2,
       "params": [
         {
           "key": "d1",
@@ -148,6 +150,7 @@
       "required": true,
       "description": "含弯月面体积修正，并与纯水标准值比较",
       "rowCount": 5,
+      "minRows": 2,
       "params": [
         {
           "key": "density",
@@ -229,6 +232,7 @@
       "required": false,
       "description": "选择拉脱法时记录盐水浓度与破膜电压",
       "rowCount": 5,
+      "minRows": 2,
       "params": [
         {
           "key": "concentration",
@@ -286,6 +290,7 @@
       "required": false,
       "description": "选择毛细管法时记录盐水浓度、液柱高与管径",
       "rowCount": 5,
+      "minRows": 2,
       "params": [
         {
           "key": "concentration",
