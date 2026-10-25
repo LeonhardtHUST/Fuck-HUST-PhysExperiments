@@ -121,6 +121,16 @@ python -m ocr_dataset.templates --check                        # 必须通过
 
 `next build` 用 `fs.rm` 删 `frontend/out`，在 Windows 上会被 IDE 的安全删除钩子拦掉并报 ENOENT。清理已由 `scripts/dev.ps1` / `scripts/dev.sh` 负责（实现细节见脚本内注释，用法 refer to `README.md`）：**不要在半路手动删 `.next` / `out` 后中断构建**，那只会制造“锁被占”和 404 的假象。
 
+### 10. MCP stdio 自测：stdout 只有协议帧，收尾别靠官方客户端
+
+- **现象**：临时脚本用 `mcp.client.stdio.stdio_client` 起 `backend/mcp_server.py` 会卡住不返回，并留下孤儿 `python.exe`（脚本与 server 各一个），看起来像「服务端不应答」；实际 `initialize` / `tools/list` 早已正常返回（单帧耗时 ~2 s）。
+- **病因一（收尾）**：官方客户端的子进程收尾在 Windows 上会挂住，与业务代码无关。
+- **病因二（探针写法）**：`subprocess.run(input=整段 JSON-RPC)` 写完立刻 EOF，服务器处理完前几帧就退出，后面的 `tools/call` 拿不到响应；必须用 `Popen` 保持 stdin 开启，按行读 stdout 并给每帧设超时，最后 `kill`。
+- **正确自测**：`npm run mcp:check`（`scripts/mcp.mjs` 转发到 `backend/mcp_server.py --check`，清单打到 stderr）；协议层回归不必起客户端，`backend/tests/test_mcp_tools.py` 直接调纯函数。
+- **MCP 只在本机**：`backend/Dockerfile` 不 COPY `mcp_server.py` / `physlab_mcp/`，`backend/.dockerignore` 也把两者排除，云端只跑 `uvicorn`。别为了「容器里也能跑」把 COPY 加回去——部署产物里出现 MCP 即视为回退（见 `docs/deployment.md`「MCP 不在部署范围内」）。
+- **清孤儿**：`Get-CimInstance Win32_Process -Filter "Name='python.exe'" | ? { $_.CommandLine -match 'mcp_server|probe' }` 后逐个 `taskkill /PID <pid> /T /F`（PowerShell 里 `$pid` 是只读内置变量，循环变量换个名字）。
+- **纪律**：stdio 下日志一律走 stderr，入口脚本已强制 `MPLBACKEND=Agg`（否则 matplotlib 可能弹窗/写 stdout 破坏协议）。
+
 ## 提交习惯
 
 - 提交信息用中文 Conventional Commits，scope 取模块名：`feat(workspace): ...`、`fix(gmr): ...`、`docs(readme): ...`。
