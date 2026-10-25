@@ -4,6 +4,7 @@ import { useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { isOutsideRange, rangeLabel, type InputRangeHint } from "@/lib/input-ranges";
 import OcrTableImporter from "./OcrTableImporter";
+import { appendRow, removeRowAt } from "./table-rows";
 
 interface Header {
   label: string;
@@ -18,6 +19,12 @@ interface Props {
   onChange: (data: string[][]) => void;
   compact?: boolean;
   ocr?: { experimentId: string; tableId: string };
+  /** 允许自由增删数据行（未传时渲染与固定表格完全一致） */
+  resizable?: boolean;
+  /** 最少保留行数，删除到下限时禁用删除按钮 */
+  minRows?: number;
+  /** 自定义“添加一行”的行内容（缺省按表头列数补空行，首列自动编号） */
+  onAddRow?: (rows: string[][]) => string[][];
 }
 
 export default function DataInputTable({
@@ -26,8 +33,32 @@ export default function DataInputTable({
   onChange,
   compact,
   ocr,
+  resizable,
+  minRows = 1,
+  onAddRow,
 }: Props) {
   const inputRefs = useRef<(HTMLInputElement | null)[][]>([]);
+  const autoIndexColumn = headers[0]?.readOnly ? 0 : undefined;
+  const canRemove = resizable === true && data.length > Math.max(1, minRows);
+
+  const addRow = useCallback(() => {
+    const next = onAddRow
+      ? onAddRow(data)
+      : appendRow(data, { indexColumn: autoIndexColumn, columns: headers.length });
+    onChange(next);
+  }, [autoIndexColumn, data, headers.length, onAddRow, onChange]);
+
+  const removeRow = useCallback(
+    (rowIndex: number) => {
+      onChange(
+        removeRowAt(data, rowIndex, {
+          indexColumn: autoIndexColumn,
+          minRows: Math.max(1, minRows),
+        })
+      );
+    },
+    [autoIndexColumn, data, minRows, onChange]
+  );
 
   const handleChange = useCallback(
     (row: number, col: number, value: string) => {
@@ -170,6 +201,15 @@ export default function DataInputTable({
                   )}
                 </th>
               ))}
+              {resizable && (
+                <th
+                  scope="col"
+                  className="w-10 border-b border-stone-200 bg-stone-50 px-2 py-3 text-center text-[10px] font-normal text-stone-400"
+                  title={`至少 ${Math.max(1, minRows)} 行`}
+                >
+                  行
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -225,11 +265,53 @@ export default function DataInputTable({
                     </td>
                   );
                 })}
+                {resizable && (
+                  <td
+                    className={cn(
+                      "border-b border-stone-100 p-0 text-center",
+                      ri === data.length - 1 && "border-b-0"
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => removeRow(ri)}
+                      disabled={!canRemove}
+                      aria-label={`删除第 ${ri + 1} 行`}
+                      title={
+                        canRemove
+                          ? `删除第 ${ri + 1} 行`
+                          : `至少需要保留 ${Math.max(1, minRows)} 行`
+                      }
+                      className={cn(
+                        "mx-auto flex h-7 w-7 items-center justify-center rounded-md text-base leading-none transition-colors",
+                        canRemove
+                          ? "text-stone-400 hover:bg-rose-50 hover:text-rose-600"
+                          : "cursor-not-allowed text-stone-200"
+                      )}
+                    >
+                      ×
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {resizable && (
+        <div className="flex items-center justify-between gap-3 border-t border-stone-100 bg-stone-50/60 px-4 py-2">
+          <button
+            type="button"
+            onClick={addRow}
+            className="rounded-md border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-600 transition-colors hover:border-indigo-300 hover:text-indigo-700"
+          >
+            + 添加一行
+          </button>
+          <span className="text-[11px] text-stone-400">
+            共 {data.length} 行 · 至少 {Math.max(1, minRows)} 行，可自由增删
+          </span>
+        </div>
+      )}
     </div>
     </>
   );

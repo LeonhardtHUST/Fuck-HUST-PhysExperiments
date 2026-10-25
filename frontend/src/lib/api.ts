@@ -462,7 +462,10 @@ export interface GenericMethod {
   name: string;
   required: boolean;
   description: string;
+  /** 默认行数（讲义推荐条数），表格可在此基础上自由增删 */
   rowCount: number;
+  /** 最少行数；低于此值无法计算（缺省 1） */
+  minRows?: number;
   columns: GenericColumn[];
   params?: GenericParameter[];
   prefill?: Record<string, number[]>;

@@ -33,8 +33,11 @@ import OcrTableImporter from "./OcrTableImporter";
 import DataContributionPanel from "./DataContributionPanel";
 import { useDataCollection } from "@/hooks/useDataCollection";
 import {
+  appendDraftRow,
   completionState,
   nextGridCell,
+  removeDraftRowAt,
+  trimDraftRows,
   type CompletionMethod,
 } from "./generic-workspace-logic";
 
@@ -123,10 +126,12 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
         // 实测参数（室温 t、预平衡 Rn）没有 default，学生不填就不发送，由后端点名，绝不替学生编一个值
         if (value !== undefined && value !== null) parameters[parameter.key] = value;
       }
+      const columnKeys = method.columns.map((column) => column.key);
       return [method.id, {
         params: parameters,
-        rows: (source?.rows ?? []).map((row) =>
-          Object.fromEntries(method.columns.map((column) => [column.key, numeric(row[column.key] ?? "")]))
+        // 末尾整行空白不计入提交：录入 10 行不会被默认的 12 行模板拖成 12 行
+        rows: trimDraftRows(source?.rows ?? [], columnKeys).map((row) =>
+          Object.fromEntries(columnKeys.map((key) => [key, numeric(row[key] ?? "")]))
         ),
       }];
     }));
@@ -140,6 +145,7 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
       required: method.required,
       paramKeys: (method.params ?? []).map((parameter) => parameter.key),
       columnKeys: method.columns.map((column) => column.key),
+      minRows: method.minRows ?? 1,
     })),
     [config]
   );
@@ -172,6 +178,33 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
       [methodId]: {
         ...previous[methodId],
         rows: previous[methodId].rows.map((row, index) => index === rowIndex ? { ...row, [key]: value } : row),
+      },
+    }));
+    setResult(null);
+  };
+
+  const addRow = (methodId: string) => {
+    const method = config?.methods.find((item) => item.id === methodId);
+    if (!method) return;
+    const columnKeys = method.columns.map((column) => column.key);
+    setDraft((previous) => ({
+      ...previous,
+      [methodId]: {
+        ...previous[methodId],
+        rows: appendDraftRow(previous[methodId].rows, columnKeys),
+      },
+    }));
+    setResult(null);
+  };
+
+  const removeRow = (methodId: string, rowIndex: number) => {
+    const method = config?.methods.find((item) => item.id === methodId);
+    if (!method) return;
+    setDraft((previous) => ({
+      ...previous,
+      [methodId]: {
+        ...previous[methodId],
+        rows: removeDraftRowAt(previous[methodId].rows, rowIndex, method.minRows ?? 1),
       },
     }));
     setResult(null);
@@ -293,12 +326,13 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
           <OcrTableImporter
             experimentId={id}
             tableId={current.id}
-            expectedCellCount={current.rowCount * current.columns.length}
+            expectedCellCount={(draft[current.id]?.rows.length ?? 0) * current.columns.length}
             onApply={applyCurrentOCR}
           />
-          <div className="overflow-x-auto rounded-xl border border-stone-200">
+          <div className="overflow-hidden rounded-xl border border-stone-200">
+            <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] border-collapse text-sm">
-              <thead><tr>{current.columns.map((column) => <th key={column.key} className="whitespace-nowrap border-b border-stone-200 bg-stone-50 px-3 py-3 text-xs font-bold text-stone-500">{column.label}{column.unit && <span className="ml-1 font-normal text-stone-400">({column.unit})</span>}<span className="mt-0.5 block text-[10px] font-normal text-amber-600">{rangeLabel(rangeFor(id, current.id, column), column.unit)}</span></th>)}</tr></thead>
+              <thead><tr>{current.columns.map((column) => <th key={column.key} className="whitespace-nowrap border-b border-stone-200 bg-stone-50 px-3 py-3 text-xs font-bold text-stone-500">{column.label}{column.unit && <span className="ml-1 font-normal text-stone-400">({column.unit})</span>}<span className="mt-0.5 block text-[10px] font-normal text-amber-600">{rangeLabel(rangeFor(id, current.id, column), column.unit)}</span></th>)}<th className="w-10 border-b border-stone-200 bg-stone-50 px-2 py-3 text-center text-[10px] font-normal text-stone-400" title={`至少 ${current.minRows ?? 1} 行`}>行</th></tr></thead>
               <tbody>
                 {draft[current.id]?.rows.map((row, rowIndex) => (
                   <tr key={rowIndex} className="hover:bg-indigo-50/30">
@@ -321,10 +355,40 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
                         />
                       </td>
                     ))}
+                    <td className="border-b border-stone-100 p-0 text-center">
+                      <button
+                        type="button"
+                        onClick={() => removeRow(current.id, rowIndex)}
+                        disabled={(draft[current.id]?.rows.length ?? 0) <= (current.minRows ?? 1)}
+                        aria-label={`删除第 ${rowIndex + 1} 行`}
+                        title={(draft[current.id]?.rows.length ?? 0) <= (current.minRows ?? 1) ? `至少需要保留 ${current.minRows ?? 1} 行` : `删除第 ${rowIndex + 1} 行`}
+                        className={cn(
+                          "mx-auto flex h-7 w-7 items-center justify-center rounded-md text-base leading-none transition-colors",
+                          (draft[current.id]?.rows.length ?? 0) <= (current.minRows ?? 1)
+                            ? "cursor-not-allowed text-stone-200"
+                            : "text-stone-400 hover:bg-rose-50 hover:text-rose-600"
+                        )}
+                      >
+                        ×
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-t border-stone-100 bg-stone-50/60 px-4 py-2">
+              <button
+                type="button"
+                onClick={() => addRow(current.id)}
+                className="rounded-md border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-600 transition-colors hover:border-indigo-300 hover:text-indigo-700"
+              >
+                + 添加一行
+              </button>
+              <span className="text-[11px] text-stone-400">
+                共 {draft[current.id]?.rows.length ?? 0} 行 · 默认 {current.rowCount} 行，至少 {current.minRows ?? 1} 行，可自由增删
+              </span>
+            </div>
           </div>
         </div>
       </section>

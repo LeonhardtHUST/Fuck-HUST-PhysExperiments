@@ -24,6 +24,7 @@ import {
 import { cn } from "@/lib/utils";
 import { getInputRange, isOutsideRange, rangeLabel, type InputRangeHint } from "@/lib/input-ranges";
 import DataInputTable from "@/components/workspace/DataInputTable";
+import { trimTrailingEmptyRows } from "@/components/workspace/table-rows";
 import DataContributionPanel from "@/components/workspace/DataContributionPanel";
 import { useDataCollection } from "@/hooks/useDataCollection";
 import { SOUND_LIGHT_WORKSPACE_STEPS } from "@/components/workspace/workspace-entry-flow";
@@ -61,7 +62,15 @@ interface MethodSpec {
   name: string;
   required: boolean;
   desc: string;
-  tables: { title?: string; note?: string; rows: number; cols: ColDef[] }[];
+  tables: {
+    title?: string;
+    note?: string;
+    /** 默认行数（讲义条数），可在界面上自由增删 */
+    rows: number;
+    /** 最少行数，低于此值无法计算 */
+    minRows?: number;
+    cols: ColDef[];
+  }[];
   params: { key: string; label: string; unit: string; def: string; range?: InputRangeHint }[];
 }
 
@@ -71,7 +80,7 @@ const METHOD_LAYOUTS: MethodSpec[] = [
     id: "air_resonance",
     name: "① 共振干涉法（空气）",
     required: true,
-    desc: "实验一 · 必做。S2 同方向连续移动，记录 12 个驻波共振位置（相邻间距 ≈ λ/2），逐差法求 Δl̄。",
+    desc: "实验一 · 必做。S2 同方向连续移动，默认记录 12 个驻波共振位置（相邻间距 ≈ λ/2，可自由增删，至少 4 个），逐差法求 Δl̄。",
     tables: [
       {
         note: "温度用于理论声速修正 v = 331.45 × √(1 + t/273.15)",
@@ -91,7 +100,7 @@ const METHOD_LAYOUTS: MethodSpec[] = [
     id: "water_phase",
     name: "② 相位比较法（水）",
     required: true,
-    desc: "实验一 · 必做。水中移动 S2 至李萨如为直线的 12 个相位匹配位置（与空气共用表 1-1），逐差法处理并计算 A 类不确定度。",
+    desc: "实验一 · 必做。水中移动 S2 至李萨如为直线，默认记录 12 个相位匹配位置（与空气共用表 1-1，可自由增删，至少 4 个），逐差法处理并计算 A 类不确定度。",
     tables: [
       {
         note: "频率约 1 MHz（以实际为准）",
@@ -199,7 +208,15 @@ const METHOD_LAYOUTS: MethodSpec[] = [
 interface SourceMethodConfig {
   id: string;
   type: "required" | "optional";
-  table_cols: { key: string; label: string; unit: string; count: number }[];
+  table_cols: {
+    key: string;
+    label: string;
+    unit: string;
+    /** 默认行数（讲义条数） */
+    count: number;
+    /** 最少行数；缺省 1 */
+    min_rows?: number;
+  }[];
   params: { key: string; label: string; unit: string; default: number }[];
 }
 
@@ -220,6 +237,7 @@ const METHODS: MethodSpec[] = (soundLightConfig as SourceMethodConfig[]).map((so
       return {
         ...table,
         rows: Math.max(...sourceColumns.map((column) => column.count)),
+        minRows: Math.max(1, ...sourceColumns.map((column) => column.min_rows ?? 1)),
         cols: table.cols.map((column) => {
           if (!column.key) return column;
           const sourceColumn = columns.get(column.key);
@@ -282,8 +300,8 @@ function DataEcho({
     extra.push("Δx (mm)");
   if (methodId === "light_sine" || methodId === "light_square") extra.push("Δx/Δt (mm/μs)");
   if (methodId === "tof") extra.push("v = L/T (m/s)");
-  const n =
-    Math.max(1, ...base.map((b) => rowsPayload[b.key]?.length ?? 0), spec.tables.reduce((a, t) => Math.max(a, t.rows), 0));
+  // 回显行数按实际提交的数据长度，不再被默认讲义条数撑出空行
+  const n = Math.max(1, ...base.map((b) => rowsPayload[b.key]?.length ?? 0));
   const num = (k: string, i: number) => rowsPayload[k]?.[i] ?? null;
   return (
     <div className="border-t border-stone-100 bg-white p-5 sm:p-6">
@@ -362,6 +380,11 @@ function makeRows(rows: number, extraCols: number): string[][] {
   ]);
 }
 
+/** 去掉末尾整行空白（忽略首列自动序号），行数完全由实际录入决定 */
+function dataRows(rows: string[][]): string[][] {
+  return trimTrailingEmptyRows(rows, { ignoreColumns: [0] });
+}
+
 export default function SoundLightWorkspace() {
   const collection = useDataCollection(EXP_ID);
   const [step, setStep] = useState<Step>(SOUND_LIGHT_WORKSPACE_STEPS[0]);
@@ -417,7 +440,8 @@ export default function SoundLightWorkspace() {
       const mspec = METHODS.find((m) => m.id === mId)!;
       const rowsOut: Record<string, (number | null)[]> = {};
       mspec.tables.forEach((table, ti) => {
-        const rows = getRows(mId, ti);
+        // 末尾整行空白（含自动序号列）不计入提交，行数由实际录入决定
+        const rows = dataRows(getRows(mId, ti));
         table.cols.forEach((col, ci) => {
           if (!col.key || col.readOnly) return;
           rowsOut[col.key] = rows.map((r) => {
@@ -440,11 +464,13 @@ export default function SoundLightWorkspace() {
   );
 
   // 数据是否已填满（无需预先逐方法计算，报告生成时后端会内部重算）
+  // 行数达到最小值即视为行数合法，多余的空行在提交前会被裁掉
   const isMethodFilled = (mId: string): boolean => {
     const mspec = METHODS.find((m) => m.id === mId);
     if (!mspec) return false;
     return mspec.tables.every((table, ti) => {
-      const rows = getRows(mId, ti);
+      const rows = dataRows(getRows(mId, ti));
+      if (rows.length < (table.minRows ?? 1)) return false;
       return table.cols.every((col, ci) => {
         if (!col.key || col.readOnly) return true;
         return rows.every((r) => (r[ci] ?? "").trim() !== "");
@@ -823,7 +849,12 @@ export default function SoundLightWorkspace() {
                       data={getRows(method, ti)}
                       onChange={(d) => setRows(method, ti, d)}
                       ocr={{ experimentId: EXP_ID, tableId: `${method}-${ti}` }}
+                      resizable
+                      minRows={table.minRows ?? 1}
                     />
+                    <p className="mt-2 text-[11px] leading-relaxed text-stone-400">
+                      默认 {table.rows} 行（讲义推荐），可自由增删；至少 {table.minRows ?? 1} 行才能计算。
+                    </p>
                   </div>
                 ))}
               </div>

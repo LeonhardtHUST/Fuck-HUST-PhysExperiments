@@ -35,6 +35,7 @@ import {
   type ProcessResponse,
 } from "@/lib/api";
 import DataInputTable from "@/components/workspace/DataInputTable";
+import { trimTrailingEmptyRows } from "@/components/workspace/table-rows";
 import DataContributionPanel from "@/components/workspace/DataContributionPanel";
 import SoundLightWorkspace from "@/components/workspace/SoundLightWorkspace";
 import GenericExperimentWorkspace from "@/components/workspace/GenericExperimentWorkspace";
@@ -133,11 +134,17 @@ function PolarizationWorkspace({
   };
 
   const buildRequest = useCallback((): ProcessRequest => {
+    // 首列是角度/偏移量，不参与“空行”判断；只裁末尾空行，行数由实际录入决定
+    const trim = (rows: string[][]) => trimTrailingEmptyRows(rows, { ignoreColumns: [0] });
+    const malusRows = trim(malusData);
+    const hwRows = trim(hwData);
+    const qwRows = trim(qwData);
+    const circRows = trim(circData);
     return {
       bg_uw: parseFloat(bgUw) || 0,
       theta_qwp: numberOrNull(thetaQwp) ?? 30,
       malus: {
-        rows: malusData.map((r) => ({
+        rows: malusRows.map((r) => ({
           theta: parseFloat(r[0]) || 0,
           i_left: r[1] ? parseFloat(r[1]) : null,
           i_right: r[2] ? parseFloat(r[2]) : null,
@@ -150,7 +157,7 @@ function PolarizationWorkspace({
           p2_deg: numberOrNull(hwInit.p2_deg),
           p2_min: parseFloat(hwInit.p2_min) || 0,
         },
-        rows: hwData.map((r) => ({
+        rows: hwRows.map((r) => ({
           offset: parseFloat(r[0]) || 0,
           c_deg: numberOrNull(r[1]),
           c_min: parseFloat(r[2]) || 0,
@@ -159,13 +166,13 @@ function PolarizationWorkspace({
         })),
       },
       quarterwave: {
-        rows: qwData.map((r) => ({
+        rows: qwRows.map((r) => ({
           phi: parseFloat(r[0]) || 0,
           i_raw: r[1] ? parseFloat(r[1]) : null,
         })),
       },
       circular: {
-        rows: circData.map((r) => ({
+        rows: circRows.map((r) => ({
           angle: parseFloat(r[0]) || 0,
           i_raw: r[1] ? parseFloat(r[1]) : null,
         })),
@@ -186,9 +193,29 @@ function PolarizationWorkspace({
     quarterwave: qwData.filter((r) => r[1]).length,
     circular: circData.filter((r) => r[1]).length,
   };
-  const totals = { malus: 10, halfwave: 6, quarterwave: 36, circular: 36 };
+  // 行数可自由增删，进度分母按当前实际行数统计（默认仍是讲义条数）
+  const totals = {
+    malus: Math.max(1, malusData.length),
+    halfwave: Math.max(1, hwData.length),
+    quarterwave: Math.max(1, qwData.length),
+    circular: Math.max(1, circData.length),
+  };
   const filledSum = Object.values(fills).reduce((a, b) => a + b, 0);
   const totalSum = Object.values(totals).reduce((a, b) => a + b, 0);
+
+  // 首列是角度/偏移量（由行序按 10° 推导），增行时按步长补齐，删行时保留其余行角度
+  const addAngleRow = (rows: string[][], step: number, start: number) => [
+    ...rows.map((row) => [...row]),
+    [String(start + rows.length * step), ...Array.from({ length: Math.max(0, (rows[0]?.length ?? 1) - 1) }, () => "")],
+  ];
+  const addMalusRow = (rows: string[][]) => {
+    const last = Number(rows[rows.length - 1]?.[0] ?? "100");
+    const next = Math.max(0, Number.isFinite(last) ? last - 10 : 0);
+    return [
+      ...rows.map((row) => [...row]),
+      [String(next), "", ""],
+    ];
+  };
 
   if (!experiment) {
     return (
@@ -510,6 +537,9 @@ function PolarizationWorkspace({
                   data={malusData}
                   onChange={setMalusData}
                   ocr={{ experimentId: "polarization", tableId: "malus" }}
+                  resizable
+                  minRows={2}
+                  onAddRow={addMalusRow}
                 />
               </div>
             )}
@@ -563,6 +593,9 @@ function PolarizationWorkspace({
                   data={hwData}
                   onChange={setHwData}
                   ocr={{ experimentId: "polarization", tableId: "halfwave" }}
+                  resizable
+                  minRows={2}
+                  onAddRow={(rows) => addAngleRow(rows, 10, 0)}
                 />
               </div>
             )}
@@ -581,6 +614,9 @@ function PolarizationWorkspace({
                   onChange={setQwData}
                   compact
                   ocr={{ experimentId: "polarization", tableId: "quarterwave" }}
+                  resizable
+                  minRows={3}
+                  onAddRow={(rows) => addAngleRow(rows, 10, 0)}
                 />
               </div>
             )}
@@ -599,6 +635,9 @@ function PolarizationWorkspace({
                   onChange={setCircData}
                   compact
                   ocr={{ experimentId: "polarization", tableId: "circular" }}
+                  resizable
+                  minRows={3}
+                  onAddRow={(rows) => addAngleRow(rows, 10, 0)}
                 />
               </div>
             )}
