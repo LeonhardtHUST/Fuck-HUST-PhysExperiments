@@ -5,6 +5,11 @@ __pycache__/
 tests/
 *.log
 
+# Local user data (real record sheets and collected samples) must never be
+# uploaded as part of the Cloud Run build context.
+data_collection/
+datasets/
+
 # MCP is a local-only feature (refer to docs/mcp.md): it runs on the developer
 # machine, never in Cloud Run, so neither the code nor the entry point is shipped.
 mcp_server.py

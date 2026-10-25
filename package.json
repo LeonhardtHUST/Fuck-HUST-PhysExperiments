@@ -9,7 +9,10 @@
     "prod": "node scripts/dev.mjs prod",
     "stop": "node scripts/dev.mjs stop",
     "mcp": "node scripts/mcp.mjs",
-    "mcp:check": "node scripts/mcp.mjs --check"
+    "mcp:check": "node scripts/mcp.mjs --check",
+    "deploy": "node scripts/deploy.mjs",
+    "deploy:backend": "node scripts/deploy.mjs backend",
+    "deploy:frontend": "node scripts/deploy.mjs frontend"
   },
   "engines": {
     "node": ">=20.9.0"
