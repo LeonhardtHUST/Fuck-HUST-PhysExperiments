@@ -341,17 +341,22 @@ def _h3(text: str) -> dict:
 # ------------------------------------------------------------
 # ① 原始数据表：行结构与空白记录表同一 spec（record_clean.SL_TABLE_SPECS）
 
-def _seq_filled(key: str, fillers: list):
+def _seq_filled(key: str, fillers: list, n_rows: int | None = None):
     """按 record_clean 共享 spec 建表；fillers 与数据列（去掉次数列后）平行，
-    每项为 None（该列整列留空）或与行数等长的 str 列表。"""
-    headers, widths, n = rc_spec(key)
+    每项为 None（该列整列留空）或 str 列表。
+
+    报告表按实际录入行数生成（行数可自由增删），只有空白记录表才用 spec 的讲义条数。
+    """
+    headers, widths, spec_n = rc_spec(key)
+    lengths = [len(col) for col in fillers if col]
+    n = n_rows if n_rows is not None else (max(lengths) if lengths else spec_n)
     rows = [[{"text": h} for h in headers]]
     ndata = len(headers) - 1
     for i in range(n):
         line = [{"text": str(i + 1)}]
         for c in range(ndata):
             col = fillers[c] if c < len(fillers) else None
-            v = col[i] if col else None
+            v = col[i] if col and i < len(col) else None
             line.append({"text": "" if v is None else str(v)})
         rows.append(line)
     return _tab(rows, widths, font=8, row_h=0.45)
@@ -452,27 +457,30 @@ def rc_f2(v, nd=2):
 # ② 数据处理区
 
 def _diff_table(l, dl):
-    """六组逐差逐行：ΔlN = (l(N+6) − lN)/6 = (数值 − 数值)/6 = 数值 mm。"""
+    """k 组逐差逐行：ΔlN = (l(N+k) − lN)/k = (数值 − 数值)/k = 数值 mm。"""
+    k = len(dl)
     rows = [[{"text": "Δl 组号"},
              {"text": "逐差公式与代入（l、Δl 单位 mm）"},
              {"text": "结果（mm）"}]]
-    for i in range(6):
-        j = i + 6
+    for i in range(k):
+        j = i + k
         rows.append([
             {"text": str(i + 1)},
-            {"text": f"Δl{i + 1} = |l{i + 7} − l{i + 1}|/6"
-                     f" = |{_f(l[j], 2)} − {_f(l[i], 2)}|/6"
-                     f" = {_f(abs(l[j] - l[i]), 2)}/6"},
+            {"text": f"Δl{i + 1} = |l{j + 1} − l{i + 1}|/{k}"
+                     f" = |{_f(l[j], 2)} − {_f(l[i], 2)}|/{k}"
+                     f" = {_f(abs(l[j] - l[i]), 2)}/{k}"},
             {"text": _f(dl[i], 4)},
         ])
     return _tab(rows, [1.8, 12.6, 3.4], font=8, row_h=0.42)
 
 
 def _mean_line(tag, dl, mean, unit="mm"):
-    """Δl 平均 = (Δl1 + … + Δl6)/6 = (六个数值之和)/6 = 结果。"""
-    s6 = [_f(v, 4) for v in dl]
-    return (f"{tag} = (Δl1 + Δl2 + Δl3 + Δl4 + Δl5 + Δl6)/6"
-            f" = ({' + '.join(s6)})/6 ≈ {_f(mean, 4)} {unit}")
+    """Δl 平均 = (Δl1 + … + Δlk)/k = (k 个数值之和)/k = 结果。"""
+    k = len(dl)
+    terms = [_f(v, 4) for v in dl]
+    symbols = " + ".join(f"Δl{i + 1}" for i in range(k))
+    return (f"{tag} = ({symbols})/{k}"
+            f" = ({' + '.join(terms)})/{k} ≈ {_f(mean, 4)} {unit}")
 
 
 def _proc_1a(air) -> list[dict]:
@@ -480,12 +488,17 @@ def _proc_1a(air) -> list[dict]:
     l, dl = a["l"], a["delta_l"]
     f_khz, t_c = p["f_khz"], p["temperature_degC"]
     f_hz = f_khz * 1000.0
+    n, k = len(l), len(dl)
     out = [
         _h3("处理 1a：共振干涉法测空气中声速（必做）"),
-        _cap("原始数据为 表1-1 第 2 列 l1 至 l12（单位 mm）。相邻共振位置相差半个波长，"
-             "用隔 6 次相减的逐差法求平均半波长：Δl1 = (l7 − l1)/6，Δl2 = (l8 − l2)/6，"
-             "…，Δl6 = (l12 − l6)/6。六组逐差明细见第一部分对应表格。"),
+        _cap(f"原始数据为 表1-1 第 2 列 l1 至 l{n}（单位 mm）。相邻共振位置相差半个波长，"
+             f"共 {n} 个读数，用隔 {k} 次相减的逐差法求平均半波长："
+             f"Δl1 = (l{k + 1} − l1)/{k}，Δl2 = (l{k + 2} − l2)/{k}，"
+             f"…，Δl{k} = (l{n} − l{n - k})/{k}。{k} 组逐差明细见第一部分对应表格。"),
     ]
+    if n % 2:
+        out.append(_cap(f"本次共录入 {n} 个（奇数）读数，逐差取 k = ⌊n/2⌋ = {k} 组，"
+                        f"末尾第 {n} 个中点读数不参与逐差。"))
     out.append(_diff_table(l, dl))
     mean_s = _mean_line("Δl 平均（半波长）", dl, a["dlm"])
     out.append(_cap(mean_s + "。"))
@@ -519,11 +532,16 @@ def _proc_1b(wat) -> list[dict]:
     l, dl = a["l"], a["delta_l"]
     f_mhz = p["f_mhz"]
     f_hz = f_mhz * 1e6
+    n, k = len(l), len(dl)
     out = [
         _h3("处理 1b：相位比较法测水中声速（必做）"),
-        _cap("原始数据为 表1-1 第 3 列（单位 mm）。逐差法与处理 1a 相同："
-             "Δl1 = (l7 − l1)/6，…，Δl6 = (l12 − l6)/6。六组逐差明细见第一部分对应表格。"),
+        _cap(f"原始数据为 表1-1 第 3 列（单位 mm）。逐差法与处理 1a 相同（n = {n}，k = {k}）："
+             f"Δl1 = (l{k + 1} − l1)/{k}，…，Δl{k} = (l{n} − l{n - k})/{k}。"
+             f"{k} 组逐差明细见第一部分对应表格。"),
     ]
+    if n % 2:
+        out.append(_cap(f"本次共录入 {n} 个（奇数）读数，逐差取 k = ⌊n/2⌋ = {k} 组，"
+                        f"末尾第 {n} 个中点读数不参与逐差。"))
     out.append(_diff_table(l, dl))
     mean_s = _mean_line("Δl 平均（半波长）", dl, a["dlm"])
     out.append(_cap(mean_s + "。"))
@@ -536,9 +554,11 @@ def _proc_1b(wat) -> list[dict]:
                     f" = {lam_m_s} m；v = f×λ = {_f(f_hz, 0)}×{lam_m_s} = {v_s} m/s"
                     f"（或 v = 2×f×Δl 平均 = 2×{_f(f_hz, 0)}×{_f(mean4 / 1000.0, 7)}"
                     f" = {v_s} m/s，f = {f_mhz:g} MHz = {_f(f_hz, 0)} Hz）。"))
-    # A 类不确定度（Δl 的 6 组逐差，自由度 5，t0.95(5) = 2.571）
-    out.append(_cap("A 类不确定度评估（Δl 共 6 组逐差，自由度 n − 1 = 5，"
-                    "置信概率 95%，t 分布临界值 t0.95(5) = 2.571）："))
+    # A 类不确定度（Δl 的 k 组逐差，自由度 k − 1，t0.95(dof) 查表）
+    dof = a.get("dof", k - 1)
+    t95 = a.get("t95", 2.571 if dof == 5 else 1.96)
+    out.append(_cap(f"A 类不确定度评估（Δl 共 {k} 组逐差，自由度 ν = k − 1 = {dof}，"
+                    f"置信概率 95%，t 分布临界值 t0.95({dof}) = {t95:g}）："))
     dev_rows = [[{"text": "组号"}, {"text": "偏差（mm）"}, {"text": "偏差平方（mm²）"}]]
     sq_total = 0.0
     for i, d in enumerate(dl):
@@ -551,15 +571,16 @@ def _proc_1b(wat) -> list[dict]:
     out.append(_tab(dev_rows, [1.8, 7.6, 8.4], font=8, row_h=0.42))
     sq_s = _f(sq_total, 8)
     s_dl = a["s"]
-    out.append(_cap(f"贝塞尔公式：s(Δl) = √(偏差平方和/(n − 1))"
-                    f" = √({sq_s}/5) = {_f(s_dl, 5)} mm"
+    out.append(_cap(f"贝塞尔公式：s(Δl) = √(偏差平方和/(k − 1))"
+                    f" = √({sq_s}/{max(1, k - 1)}) = {_f(s_dl, 5)} mm"
                     f"（偏差平方和取自第一部分的偏差明细表）。"))
     ua_dl = a["ua_dl_mm"]
     ua_dl_mm_s = _f(ua_dl, 5)
     ua_dl_m_s = _f(a["ua_dl_m"], 8)
     ua_v_s = _f(a["u_a_v"], 1)
+    sqrt_k_s = _f(math.sqrt(k), 5)
     out.append(_cap(f"Δl 的 A 类不确定度（记为 UA(Δl)）："
-                    f"UA(Δl) = 2.571×s(Δl)/√6 = 2.571×{_f(s_dl, 5)}/2.44949"
+                    f"UA(Δl) = {t95:g}×s(Δl)/√{k} = {t95:g}×{_f(s_dl, 5)}/{sqrt_k_s}"
                     f" = {ua_dl_mm_s} mm = {ua_dl_m_s} m；"
                     f"由 v = 2×f×Δl 误差传递：UA(v) = 2×f×UA(Δl)"
                     f" = 2×{_f(f_hz, 0)}×{ua_dl_m_s} = {ua_v_s} m/s。"))
@@ -587,7 +608,7 @@ def _proc_1c(tof) -> list[dict]:
                      {"text": _f(v[i], 1)}])
     out.append(_tab(rows, [2.4, 4.6, 5.0, 5.2], font=8, row_h=0.42))
     out.append(_cap(f"平均声速 v = {_f(a['v_mean'], 1)} m/s"
-                    f"（12 个逐点速度的算术平均）；样本标准差 = {_f(a['v_std'], 1)} m/s。"
+                    f"（{len(L)} 个逐点速度的算术平均）；样本标准差 = {_f(a['v_std'], 1)} m/s。"
                     f"与水中声速常用参考值 1480 m/s 相差"
                     f" {_f(abs(a['v_mean'] - 1480.0) / 1480.0 * 100.0, 1)}%。"))
     out.append({"kind": "spacer", "cm": 0.03})
@@ -605,16 +626,20 @@ def _proc_2a(mid, run) -> list[dict]:
     ts = [_f(v, 3) for v in a["T"]]
     t_sum = sum(a["T"])
     t_mean = a["t_mean"]
-    out.append(_cap(f"差频周期平均值（表2-1 数据，单位 μs；T1、T2、T3 为三次读数）："
-                    f"T = (T1 + T2 + T3)/3 = ({' + '.join(ts)})/3"
-                    f" = {_f(t_sum, 3)}/3 = {_f(t_mean, 3)} μs。"))
+    n_t = len(a["T"])
+    t_sym = " + ".join(f"T{i + 1}" for i in range(n_t))
+    out.append(_cap(f"差频周期平均值（表2-1 数据，单位 μs；T1…T{n_t} 为 {n_t} 次读数）："
+                    f"T = ({t_sym})/{n_t} = ({' + '.join(ts)})/{n_t}"
+                    f" = {_f(t_sum, 3)}/{n_t} = {_f(t_mean, 3)} μs。"))
     # ② r 平均
     rs = [_f(v, 3) for v in a["r"]]
     r_sum = sum(a["r"])
     r_mean = a["r_mean"]
-    out.append(_cap(f"表2-2 的 Δx/Δt 派生列即各行读数之比（单位 mm/μs），记为 r1、r2、r3；"
-                    f"其平均（讲义：计算 Δx/Δt 的平均值）：r 平均 = (r1 + r2 + r3)/3"
-                    f" = ({' + '.join(rs)})/3 = {_f(r_sum, 3)}/3"
+    n_r = len(a["r"])
+    r_sym = " + ".join(f"r{i + 1}" for i in range(n_r))
+    out.append(_cap(f"表2-2 的 Δx/Δt 派生列即各行读数之比（单位 mm/μs），记为 r1…r{n_r}；"
+                    f"其平均（讲义：计算 Δx/Δt 的平均值）：r 平均 = ({r_sym})/{n_r}"
+                    f" = ({' + '.join(rs)})/{n_r} = {_f(r_sum, 3)}/{n_r}"
                     f" = {_f(r_mean, 3)} mm/μs。"))
     # ③ λ ④ c
     lam_mm = a["lam_mm"]
@@ -648,9 +673,11 @@ def _proc_2b(lis) -> list[dict]:
     dxs = [_f(v, 2) for v in a["dx"]]
     dx_sum = sum(a["dx"])
     dx_mean = a["dxm"]
+    n_dx = len(a["dx"])
+    dx_sym = " + ".join(f"Δx{i + 1}" for i in range(n_dx))
     out.append(_cap(f"Δx = |x2 − x1|（表2-3 数据，单位 mm）："
-                    f"Δx 平均 = (Δx1 + Δx2 + Δx3)/3 = ({' + '.join(dxs)})/3"
-                    f" = {_f(dx_sum, 2)}/3 = {_f(dx_mean, 2)} mm。"))
+                    f"Δx 平均 = ({dx_sym})/{n_dx} = ({' + '.join(dxs)})/{n_dx}"
+                    f" = {_f(dx_sum, 2)}/{n_dx} = {_f(dx_mean, 2)} mm。"))
     # ② λ ③ c
     lam_mm = a["lam_mm"]
     lam_mm_s = _f(lam_mm, 2)
@@ -978,19 +1005,23 @@ def _figure_entries(present: list[tuple[str, dict]]) -> list[tuple[str, dict]]:
 def _equations(mid: str, run: dict) -> list[dict]:
     a = run["arrays"]
     if mid == "air_resonance":
+        k = a.get("k", len(a["delta_l"]))
         return [
-            latex(r"\Delta l_i=\frac{|l_{i+6}-l_i|}{6}"),
+            latex(rf"\Delta l_i=\frac{{|l_{{i+{k}}}-l_i|}}{{{k}}}"),
             latex(fr"\overline{{\Delta l}}={a['dlm']:.4f}\,\mathrm{{mm}},\quad \lambda=2\overline{{\Delta l}}={a['lam_mm']:.4f}\,\mathrm{{mm}}"),
             latex(fr"v_{{\rm exp}}=f\lambda={a['v_exp']:.2f}\,\mathrm{{m\,s^{{-1}}}}"),
             latex(fr"v_{{\rm th}}=331.45\sqrt{{1+t/273.15}}={a['v_theory']:.2f}\,\mathrm{{m\,s^{{-1}}}}"),
             latex(fr"\varepsilon_r=\frac{{|v_{{\rm exp}}-v_{{\rm th}}|}}{{v_{{\rm th}}}}\times100\%={a['err_rel']:.2f}\%"),
         ]
     if mid == "water_phase":
+        k = a.get("k", len(a["delta_l"]))
+        dof = a.get("dof", k - 1)
+        t95 = a.get("t95", 2.571 if dof == 5 else 1.96)
         return [
-            latex(r"\Delta l_i=\frac{|l_{i+6}-l_i|}{6},\quad \lambda=2\overline{\Delta l}"),
+            latex(rf"\Delta l_i=\frac{{|l_{{i+{k}}}-l_i|}}{{{k}}},\quad \lambda=2\overline{{\Delta l}}"),
             latex(fr"v=f\lambda={a['v']:.1f}\,\mathrm{{m\,s^{{-1}}}}"),
-            latex(fr"s(\Delta l)=\sqrt{{\frac{{\sum_i(\Delta l_i-\overline{{\Delta l}})^2}}{{n-1}}}}={a['s']:.5f}\,\mathrm{{mm}}"),
-            latex(fr"U_A(v)=2f\frac{{2.571s(\Delta l)}}{{\sqrt{{6}}}}={a['u_a_v']:.1f}\,\mathrm{{m\,s^{{-1}}}}"),
+            latex(fr"s(\Delta l)=\sqrt{{\frac{{\sum_i(\Delta l_i-\overline{{\Delta l}})^2}}{{k-1}}}}={a['s']:.5f}\,\mathrm{{mm}}"),
+            latex(fr"U_A(v)=2f\frac{{{t95:g}s(\Delta l)}}{{\sqrt{{{k}}}}}={a['u_a_v']:.1f}\,\mathrm{{m\,s^{{-1}}}}"),
         ]
     if mid == "tof":
         return [

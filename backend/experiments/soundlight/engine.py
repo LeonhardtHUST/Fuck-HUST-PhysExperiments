@@ -10,21 +10,23 @@
 rows: dict[str, list]，每列为 list[float | None]（长度须与方法输入列一致）。
 params: dict[str, float]，未给出的参数使用默认值。
 
-计算规则与单位换算（严格执行）：
-  A. air_resonance  空气中共振法：输入 l(mm) 12 个 + {temperature_degC=25.0, f_khz=38}。
-       逐差 Δl_i=(l[i+6]-l[i])/6 (mm, i=0..5)；波长 λ=2*mean(Δl) 由 mm 换算为 m；
+计算规则与单位换算（行数可自由增删，以 config 的 min_rows 为下限；n=12/3 与讲义一致）：
+  A. air_resonance  空气中共振法：输入 l(mm) n 个 + {temperature_degC=25.0, f_khz=38}。
+       逐差 k=n//2 组：Δl_i=(l[i+k]-l[i])/k (mm, i=0..k-1；n=12 时 k=6)；
+       波长 λ=2*mean(Δl) 由 mm 换算为 m；
        实验声速 v_exp = f_khz*1000 * λ_m；理论声速 v_theory = 331.45*sqrt(1+t/273.15)
        （理想气体声速根式温度修正，讲义式）。
-  B. water_phase    水中相位法：输入 l(mm) 12 个 + {f_mhz=1.0}，同上逐差；
+  B. water_phase    水中相位法：输入 l(mm) n 个 + {f_mhz=1.0}，同上逐差；
        v = f_mhz*1e6 * λ_m。A 类不确定度：s=std(Δl,ddof=1)，
-       U_A_Δl_m = 2.571*s/√6 再换算为米；U_A(m/s) = 2*f_Hz*U_A_Δl_m（因 v=f*2*Δl_m）。
-  C. tof            飞行时间法：输入 L(mm) 12 个 + T(μs) 12 个（讲义：连续 12 组，
+       U_A_Δl_m = t95(k-1)*s/√k 再换算为米（n=12 → 2.571*s/√6，与讲义一致）；
+       U_A(m/s) = 2*f_Hz*U_A_Δl_m（因 v=f*2*Δl_m）。
+  C. tof            飞行时间法：输入 L(mm)、T(μs) 各 n 个（n≥3，讲义：连续 12 组），
        每点 v_i = (L_i*1e-3)/(T_i*1e-6) m/s，取平均与标准差。
-  D. light_sine     光速正弦法：输入 T(μs)、Δt(μs)、x1(mm)、x2(mm) 各 3 个 + {f_mhz=150, c_ref=2.998e8}。
+  D. light_sine     光速正弦法：输入 T(μs)、Δt(μs)、x1(mm)、x2(mm) 各 n 个（n≥2）+ {f_mhz=150, c_ref=2.998e8}。
        Δx_i=|x2-x1|；逐点 r_i=Δx_i/Δt_i (mm/μs)，平均值 r_mean（讲义：计算 Δx/Δt 的平均值）；
        λ(mm) = 2*T_mean(μs)*r_mean(mm/μs)，λ_m = λ_mm*1e-3；c_exp = f_mhz*1e6 * λ_m；
        结果含绝对误差 error_abs（|c_exp-c_ref|）。
-  E. light_lissajous 光速李萨如法：输入 x1(mm)、x2(mm) 各 3 个；λ = 4*Δx_mean（mm→m）；
+  E. light_lissajous 光速李萨如法：输入 x1(mm)、x2(mm) 各 n 个（n≥2）；λ = 4*Δx_mean（mm→m）；
        c_exp = f_mhz*1e6 * λ_m。
 """
 
@@ -61,8 +63,9 @@ _METHOD_CONFIG = {item["id"]: item for item in _CONFIG}
 _METHOD_NAMES = {method: item["name"] for method, item in _METHOD_CONFIG.items()}
 
 # Calculation validation and the public config consume the same field schema.
+# count = 讲义推荐条数（仅作为前端默认行数），min_rows = 计算所需最少条数。
 _COLUMNS = {
-    method: [(column["key"], column["count"],
+    method: [(column["key"], int(column.get("min_rows", 1)),
               f'{column["label"]} ({column["unit"]})')
              for column in item["table_cols"]]
     for method, item in _METHOD_CONFIG.items()
@@ -74,7 +77,16 @@ _PARAM_DEFAULTS = {
 
 V0 = 331.45   # 0 °C 空气中声速参考值 (m/s)
 T0 = 273.15   # 绝对零度参考 (K)
-T95_5DOF = 2.571  # Student t, 置信 95%, 自由度 5
+
+# Student t 因子（置信 95%，双侧），下标为自由度；自由度超出查表范围时用正态近似。
+_T95_BY_DOF = {
+    1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571,
+    6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228,
+    11: 2.201, 12: 2.179, 13: 2.160, 14: 2.145, 15: 2.131,
+    16: 2.120, 17: 2.110, 18: 2.101, 19: 2.093, 20: 2.086,
+    21: 2.080, 22: 2.074, 23: 2.069, 24: 2.064, 25: 2.060,
+    26: 2.056, 27: 2.052, 28: 2.048, 29: 2.045, 30: 2.042,
+}
 
 
 # ──────────────────────────────────────────────── rounding helpers
@@ -97,18 +109,40 @@ def _mean(vals):
     return sum(vals) / len(vals)
 
 
+def _t95(dof: int) -> float:
+    """置信 95% 的 Student t 因子；dof 越大越接近 1.96。"""
+    dof = max(1, int(dof))
+    return _T95_BY_DOF.get(dof, 1.96 if dof > 30 else 12.706)
+
+
+def progressive_difference(values):
+    """逐差法：n 个读数取 k = n//2 组，Δ_i = |l[i+k] - l[i]| / k。
+
+    n=12 时 k=6，与讲义「隔 6 次相减、共 6 组」完全一致；
+    n=10 时 k=5；奇数个数据时末尾 1 点（中点）不参与逐差。
+    """
+    n = len(values)
+    k = n // 2
+    if k < 2:
+        raise ValueError(f"逐差法至少需要 4 个数据，当前只有 {n} 个")
+    return k, [abs(values[i + k] - values[i]) / k for i in range(k)]
+
+
 # ──────────────────────────────────────────────── validation
 
-def _parse_col(rows, key, need_len, label, errors):
-    """Extract numeric column; return list[float|None] or None on structural error."""
+def _parse_col(rows, key, min_len, label, errors):
+    """Extract numeric column; return list[float|None] or None on structural error.
+
+    行数可以自由增删，只要不少于 min_len（计算下限）即可。
+    """
     raw = rows.get(key)
     if not isinstance(raw, list):
         errors.append(f"{label}：缺少该数据列，请检查输入")
         return None
-    if len(raw) != need_len:
-        errors.append(f"{label}：应有 {need_len} 个数据，实际收到 {len(raw)} 个")
+    if len(raw) < min_len:
+        errors.append(f"{label}：至少需要 {min_len} 个数据，实际收到 {len(raw)} 个")
         return None
-    out = [None] * need_len
+    out = [None] * len(raw)
     n_valid = 0
     for i, v in enumerate(raw):
         if v is None:
@@ -243,7 +277,7 @@ def _light_lissajous_fig(dx, dxm):
 def _calc_air_resonance(cols, p):
     l = cols["l"]
     n = len(l)
-    dl = [abs(l[i + 6] - l[i]) / 6.0 for i in range(n - 6)]
+    k, dl = progressive_difference(l)
     dlm = _mean(dl)
     lam_m = 2.0 * dlm * 1e-3          # mm -> m
     f_hz = p["f_khz"] * 1000.0
@@ -266,20 +300,24 @@ def _calc_air_resonance(cols, p):
                          f"v_exp ≈ {v_exp:.1f} m/s；v_theory ≈ {v_theory:.1f} m/s（t = {p['temperature_degC']:g} °C）")
     arrays = {"l": l, "delta_l": dl, "dlm": dlm, "s": s_dl, "lam_mm": 2.0 * dlm,
               "v_exp": v_exp, "v_theory": v_theory, "err_abs": err_abs,
-              "err_rel": err_rel}
+              "err_rel": err_rel,
+              "n": n, "k": k, "used_points": 2 * k, "dof": k - 1, "t95": _t95(k - 1)}
     return results, b64, arrays
 
 
 def _calc_water_phase(cols, p):
     l = cols["l"]
     n = len(l)
-    dl = [abs(l[i + 6] - l[i]) / 6.0 for i in range(n - 6)]
+    k, dl = progressive_difference(l)
     dlm = _mean(dl)
     f_hz = p["f_mhz"] * 1e6
     lam_m = 2.0 * dlm * 1e-3
     v = f_hz * lam_m
     s_dl = float(np.std(dl, ddof=1)) if len(dl) > 1 else 0.0
-    ua_dl_mm = T95_5DOF * s_dl / math.sqrt(6)      # U_A(Δl)，mm（n=6 差值, t95(ν=5)=2.571）
+    dof = k - 1
+    t95 = _t95(dof)
+    # U_A(Δl) = t95(ν=k-1)·s/√k，mm（n=12 → k=6、t95=2.571，与讲义一致）
+    ua_dl_mm = t95 * s_dl / math.sqrt(k)
     ua_dl_m = ua_dl_mm * 1e-3                       # mm -> m
     ua_v = 2.0 * f_hz * ua_dl_m                     # v = f*(2*Δl_m)
     results = [
@@ -293,7 +331,8 @@ def _calc_water_phase(cols, p):
                          f"v ≈ {v:.1f} m/s；U_A ≈ {ua_v:.2f} m/s")
     arrays = {"l": l, "delta_l": dl, "dlm": dlm, "s": s_dl, "v": v,
               "lam_mm": 2.0 * dlm,
-              "ua_dl_mm": ua_dl_mm, "ua_dl_m": ua_dl_m, "u_a_v": ua_v}
+              "ua_dl_mm": ua_dl_mm, "ua_dl_m": ua_dl_m, "u_a_v": ua_v,
+              "n": n, "k": k, "used_points": 2 * k, "dof": dof, "t95": t95}
     return results, b64, arrays
 
 
@@ -408,18 +447,23 @@ def analyze(method, rows, params=None):
                 "params_used": {}, "method": requested_method}
     errors = []
     cols = {}
-    for key, need_len, label in _COLUMNS[method]:
-        parsed = _parse_col(rows or {}, key, need_len, label, errors)
+    for key, min_len, label in _COLUMNS[method]:
+        parsed = _parse_col(rows or {}, key, min_len, label, errors)
         if parsed is not None:
             cols[key] = parsed
     # 逐差 / 配对计算要求完整数据
-    for key, need_len, label in _COLUMNS[method]:
+    for key, min_len, label in _COLUMNS[method]:
         parsed = cols.get(key)
         if parsed is None:
             continue
         for i, v in enumerate(parsed):
             if v is None:
                 errors.append(f"{label}：第 {i + 1} 个数据缺失，请补全后再处理")
+    # 同一次测量的各列必须行数一致（不同列按行配对，不能静默截断）
+    lengths = {key: len(value) for key, value in cols.items()}
+    if len(set(lengths.values())) > 1:
+        detail = "、".join(f"{key} {count} 行" for key, count in lengths.items())
+        errors.append(f"同一张表各列行数需一致（当前：{detail}）")
     if errors:
         return {"status": "validation_error", "errors": errors,
                 "results": [], "plots": {}, "arrays": {},
@@ -435,7 +479,10 @@ def analyze(method, rows, params=None):
             if len(set(cols["L"])) < 2:
                 raise ValueError("飞行时间拟合需要至少两个不同的传播距离")
         if method in ("air_resonance", "water_phase"):
-            spans = [cols["l"][i + 6] - cols["l"][i] for i in range(6)]
+            k = len(cols["l"]) // 2
+            if k < 2:
+                raise ValueError(f"逐差法至少需要 4 个数据，当前只有 {len(cols['l'])} 个")
+            spans = [cols["l"][i + k] - cols["l"][i] for i in range(k)]
             if any(v == 0 for v in spans) or not (all(v > 0 for v in spans)
                                                   or all(v < 0 for v in spans)):
                 raise ValueError("逐差方向必须一致且间距非零，请核对记录顺序与位置读数")

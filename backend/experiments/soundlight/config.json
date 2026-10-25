@@ -5,8 +5,8 @@
     "type": "required",
     "purpose": "利用空气中的超声驻波共振测量声速（约 38 kHz）",
     "table_cols": [
-      {"key": "l", "label": "共振位置 l", "unit": "mm", "count": 12,
-       "note": "12 个连续共振位置，单方向移动记录"}
+      {"key": "l", "label": "共振位置 l", "unit": "mm", "count": 12, "min_rows": 4,
+       "note": "默认 12 个连续共振位置（可增删，至少 4 个），单方向移动记录"}
     ],
     "params": [
       {"key": "temperature_degC", "label": "环境温度 t", "unit": "°C", "default": 25.0},
@@ -27,8 +27,8 @@
     "type": "required",
     "purpose": "利用相位比较法（李萨如直线判据）测量水中的声速（约 1 MHz）",
     "table_cols": [
-      {"key": "l", "label": "同相位位置 l", "unit": "mm", "count": 12,
-       "note": "12 个连续相位匹配（李萨如直线）位置，相邻约 λ/2"}
+      {"key": "l", "label": "同相位位置 l", "unit": "mm", "count": 12, "min_rows": 4,
+       "note": "默认 12 个连续相位匹配（李萨如直线）位置（可增删，至少 4 个），相邻约 λ/2"}
     ],
     "params": [
       {"key": "f_mhz", "label": "水中超声波频率 f", "unit": "MHz", "default": 1.0}
@@ -46,9 +46,9 @@
     "type": "optional",
     "purpose": "利用脉冲波的飞行时间测量声速（选做）",
     "table_cols": [
-      {"key": "L", "label": "传播距离 L", "unit": "mm", "count": 12,
-       "note": "等间距（如 20 mm）移动接收端，连续 12 组"},
-      {"key": "T", "label": "飞行时间 T", "unit": "μs", "count": 12}
+      {"key": "L", "label": "传播距离 L", "unit": "mm", "count": 12, "min_rows": 3,
+       "note": "默认连续 12 组等间距（如 20 mm）移动接收端（可增删，至少 3 组）"},
+      {"key": "T", "label": "飞行时间 T", "unit": "μs", "count": 12, "min_rows": 3}
     ],
     "params": [],
     "outputs": [
@@ -62,10 +62,10 @@
     "type": "required",
     "purpose": "利用差频正弦波的相位差测量光速（约 150 MHz 调制）",
     "table_cols": [
-      {"key": "T", "label": "差频周期 T", "unit": "μs", "count": 3},
-      {"key": "dt", "label": "相位差 Δt", "unit": "μs", "count": 3},
-      {"key": "x1", "label": "反射镜位置 x1", "unit": "mm", "count": 3},
-      {"key": "x2", "label": "反射镜位置 x2", "unit": "mm", "count": 3}
+      {"key": "T", "label": "差频周期 T", "unit": "μs", "count": 3, "min_rows": 2},
+      {"key": "dt", "label": "相位差 Δt", "unit": "μs", "count": 3, "min_rows": 2},
+      {"key": "x1", "label": "反射镜位置 x1", "unit": "mm", "count": 3, "min_rows": 2},
+      {"key": "x2", "label": "反射镜位置 x2", "unit": "mm", "count": 3, "min_rows": 2}
     ],
     "params": [
       {"key": "f_mhz", "label": "调制频率 f", "unit": "MHz", "default": 150.0},
@@ -87,10 +87,10 @@
     "type": "optional",
     "purpose": "按讲义要求复用相位差法，以方波基准与测相信号测量光速",
     "table_cols": [
-      {"key": "T", "label": "差频周期 T", "unit": "μs", "count": 3},
-      {"key": "dt", "label": "相位差 Δt", "unit": "μs", "count": 3},
-      {"key": "x1", "label": "反射镜位置 x1", "unit": "mm", "count": 3},
-      {"key": "x2", "label": "反射镜位置 x2", "unit": "mm", "count": 3}
+      {"key": "T", "label": "差频周期 T", "unit": "μs", "count": 3, "min_rows": 2},
+      {"key": "dt", "label": "相位差 Δt", "unit": "μs", "count": 3, "min_rows": 2},
+      {"key": "x1", "label": "反射镜位置 x1", "unit": "mm", "count": 3, "min_rows": 2},
+      {"key": "x2", "label": "反射镜位置 x2", "unit": "mm", "count": 3, "min_rows": 2}
     ],
     "params": [
       {"key": "f_mhz", "label": "调制频率 f", "unit": "MHz", "default": 150.0},
@@ -110,8 +110,8 @@
     "type": "required",
     "purpose": "利用李萨如图 π 相位变化（直线↔反斜率直线）测量光速",
     "table_cols": [
-      {"key": "x1", "label": "直线位置 x1", "unit": "mm", "count": 3},
-      {"key": "x2", "label": "反斜率直线位置 x2", "unit": "mm", "count": 3}
+      {"key": "x1", "label": "直线位置 x1", "unit": "mm", "count": 3, "min_rows": 2},
+      {"key": "x2", "label": "反斜率直线位置 x2", "unit": "mm", "count": 3, "min_rows": 2}
     ],
     "params": [
       {"key": "f_mhz", "label": "调制频率 f", "unit": "MHz", "default": 150.0},
