@@ -12,13 +12,11 @@ import os
 from pathlib import Path
 from typing import Any
 
-from app.experiment_gate import missing_required_methods
 from experiments.core.exceptions import ExperimentInputError
 from experiments.core.registry import PUBLIC_EXPERIMENT_IDS, registry
 
 from physlab_mcp import artifacts, payloads, references
 from physlab_mcp.errors import ToolDisabled, ToolError, ToolInputError
-from physlab_mcp.payloads import PayloadKind
 
 DATA_COLLECTION_FLAG = "PHYSICSLAB_MCP_ENABLE_DATA_COLLECTION"
 PRIVACY_NOTE = (
@@ -153,21 +151,12 @@ def process_experiment_data(
 
 # ---------------------------------------------------------------- documents
 
-def _gate(adapter: Any, kind: PayloadKind, payload: dict[str, Any]) -> None:
-    if kind != "general":
-        return
-    missing = missing_required_methods(adapter.config, payload)
-    if missing:
-        raise ToolInputError(f"请先填写完全部必做实验：{'、'.join(missing)}")
-
-
 def generate_experiment_report(
     experiment_id: str, data: Any, fmt: str = "docx",
 ) -> dict[str, Any]:
     adapter, kind = payloads.resolve(experiment_id)
-    selected = payloads.check_format(fmt)
+    selected = payloads.check_report_format(fmt)
     payload = payloads.report_payload(adapter, kind, data)
-    _gate(adapter, kind, payload)
     if not payload:
         raise ToolInputError("未提供任何实验数据")
     try:

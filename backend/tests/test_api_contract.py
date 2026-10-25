@@ -5,6 +5,8 @@ import json
 from fastapi.testclient import TestClient
 
 from app.main import app
+from experiments.core import documents as docs
+from experiments.core.registry import registry
 
 
 client = TestClient(app)
@@ -76,11 +78,16 @@ def _bridge_data(**cu50_params):
     }}
 
 
-def test_report_gate_requires_the_measured_pre_balance_reading():
-    """预平衡 Rn 是现场实测值：绕过前端直接调 API 也不能缺（否则公式无法反解）。"""
-    blocked = client.post("/api/experiments/bridge/report", json=_bridge_data(), params={"fmt": "pdf"})
-    assert blocked.status_code == 400
-    assert "卧式电桥测 Cu50" in blocked.json()["detail"]
+def test_report_marks_a_missing_measured_pre_balance_reading_as_an_omission():
+    """预平衡 Rn 缺失时不再拒绝出报告，而是把该必做项标注为缺项。"""
+    response = client.post("/api/experiments/bridge/report", json=_bridge_data(), params={"fmt": "pdf"})
+    assert response.status_code == 200
+    assert response.content[:4] == b"%PDF"
+
+    blocks = docs.report_blocks(registry.get("bridge"), _bridge_data()["data"])
+    texts = [block.get("text", "") for block in blocks if block.get("text")]
+    assert "必做项目缺项" in texts
+    assert any("卧式电桥测 Cu50" in text and "缺项" in text for text in texts)
 
     allowed = client.post("/api/experiments/bridge/report",
                           json=_bridge_data(rn=54.6), params={"fmt": "pdf"})

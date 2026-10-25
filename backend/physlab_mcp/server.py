@@ -114,9 +114,10 @@ def build_server(name: str = SERVER_NAME) -> FastMCP:
     def generate_experiment_report(
         experiment_id: str, data: dict[str, Any], fmt: str = "docx",
     ) -> dict[str, Any]:
-        """生成 Word / PDF 实验报告（含数据表、拟合图与误差分析），返回文件路径。
+        """生成 Word / PDF / Markdown / JSONC 实验报告（含数据表、拟合图与误差分析），返回文件路径。
 
-        fmt 只能是 docx 或 pdf。必做子实验没填完会拒绝生成并说明缺哪一项。
+        fmt 只能是 docx、pdf、md 或 jsonc。必做子实验没填完时报告照常生成，
+        缺项会在正文中标注并留空。
         """
         return _run("generate_experiment_report", experiment_id,
                     lambda: tools.generate_experiment_report(experiment_id, data, fmt))

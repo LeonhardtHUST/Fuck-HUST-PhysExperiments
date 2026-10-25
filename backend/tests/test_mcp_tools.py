@@ -204,14 +204,44 @@ def test_every_experiment_has_a_blank_record_sheet(experiment_id, fmt):
     assert "-数据记录表-" in artifact["filename"]
 
 
-def test_report_rejects_a_missing_required_method():
-    with pytest.raises(ToolInputError, match="请先填写完全部必做实验"):
+def test_report_without_any_data_is_rejected():
+    with pytest.raises(ToolInputError, match="未提供任何实验数据"):
         tools.generate_experiment_report("michelson", {}, "docx")
 
 
+def test_report_marks_a_missing_required_method_as_an_omission():
+    fixture = load_fixture("michelson", "typical")
+    data = dict(fixture["data"])
+    first_required = next(
+        method for method in registry.get("michelson").config["methods"] if method["required"]
+    )
+    data.pop(first_required["id"])
+
+    artifact = tools.generate_experiment_report("michelson", data, "docx")["file"]
+
+    assert Path(artifact["path"]).read_bytes().startswith(b"PK")
+
+
 def test_report_rejects_an_unsupported_format():
-    with pytest.raises(ToolInputError, match="fmt 必须是 docx 或 pdf"):
+    with pytest.raises(ToolInputError, match="fmt 必须是 docx、pdf、md 或 jsonc"):
         tools.generate_experiment_report("michelson", {}, "xlsx")
+
+
+@pytest.mark.parametrize("fmt", ["md", "jsonc"])
+def test_report_writes_the_text_formats(fmt, isolated_output_dir):
+    fixture = load_fixture("michelson", "typical")
+    artifact = tools.generate_experiment_report("michelson", report_input(fixture), fmt)["file"]
+
+    path = Path(artifact["path"])
+    assert path.is_file() and path.suffix == f".{fmt}"
+    assert artifact["bytes"] == path.stat().st_size > 1000
+    content = path.read_text(encoding="utf-8")
+    if fmt == "md":
+        assert artifact["mime"] == "text/markdown"
+        assert content.startswith("<!-- physlab.report")
+    else:
+        assert artifact["mime"] == "application/jsonc"
+        assert content.startswith("// PhysicsLab 完整报告（JSONC）")
 
 
 def test_report_filenames_are_windows_safe():

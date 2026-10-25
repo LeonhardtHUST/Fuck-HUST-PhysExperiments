@@ -30,6 +30,7 @@ from app.models import (
 from experiments.core.configured import ConfiguredExperiment
 from experiments.core.exceptions import UnknownExperimentError
 from experiments.core.registry import registry
+from experiments.core.report_export import REPORT_FORMATS
 from physlab_mcp.errors import ToolInputError, UnknownToolExperiment
 
 PayloadKind = Literal["general", "polarization", "sound-light"]
@@ -84,9 +85,18 @@ def resolve(experiment_id: str) -> tuple[Any, PayloadKind]:
 
 
 def check_format(fmt: str) -> str:
+    """Validate a blank record-sheet format (docx/pdf only)."""
     value = (fmt or "").strip().lower()
     if value not in _SUPPORTED_FORMATS:
         raise ToolInputError("fmt 必须是 docx 或 pdf")
+    return value
+
+
+def check_report_format(fmt: str) -> str:
+    """Validate a complete-report format, including the text exports."""
+    value = (fmt or "").strip().lower()
+    if value not in REPORT_FORMATS:
+        raise ToolInputError("fmt 必须是 docx、pdf、md 或 jsonc")
     return value
 
 

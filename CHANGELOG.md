@@ -11,13 +11,14 @@ PhysLab 的版本记录。格式参考 [Keep a Changelog](https://keepachangelog
 - **数据特征参考工具**：按 `experiments/*/data_reference.json` 内的 `experiment_id` 建索引，新增实验无需改代码
 - **默认关闭的共建工具**：`contribute_record_sheet` / `commit_contributed_data` / `withdraw_contribution` 仅在 `PHYSICSLAB_MCP_ENABLE_DATA_COLLECTION=true` 且 `ENABLE_DATA_COLLECTION=true` 时注册，且每次调用都要求 `consent=true`
 - **npm 包装**：`npm run mcp`（前台启动 stdio 服务器）与 `npm run mcp:check`（打印工具清单自检），由 `scripts/mcp.mjs` 自动定位 `.venv` 解释器并检查 `mcp` 依赖
+- **报告新增 Markdown / JSONC 导出**：完整报告除 Word / PDF 外可下载 `md`（图片 data URI 内嵌）与 `jsonc`（机器可读、带 `//` 头注释），三个工作台与 MCP `generate_experiment_report` 同时支持；JSONC 结构由 `docs/schemas/report.schema.json` 定义，说明见 `docs/report-format.md`
 - `docs/mcp.md`：三份客户端配置片段、`data` 三种结构、环境变量与排障表
 - README 增加 Vite+ 用法：`vp run <task>` / `vpr <task>` 与 npm 脚本的对照，以及「`vpr` 不吞 `--`」的差异说明
 
 ### Changed
 
 - **MCP 明确为本地能力**：`backend/Dockerfile` 不再打包 `mcp_server.py` / `physlab_mcp/`，`backend/.dockerignore` 同时把它们排除出构建上下文，云端只部署 `uvicorn` 的 HTTP 后端（见 `docs/deployment.md`）
-- 「必做子实验是否填完整」的判断抽到 `app/experiment_gate.py`，报告路由与 MCP 工具共用同一规则与文案（HTTP 行为不变）
+- **报告允许必做缺项**：生成报告不再被「请先填写完全部必做实验」拦截；未算出结果的必做子实验在报告第三部分标注为「必做项目缺项」并留空，其余已提交数据照常计算，HTTP 路由与 MCP 工具行为一致
 
 ## 2.0 — 2026-09-18
 

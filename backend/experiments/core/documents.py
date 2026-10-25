@@ -129,9 +129,16 @@ def _derived_table(rows: list[dict]) -> dict | None:
 
 def report_blocks(experiment, data: dict) -> list[dict]:
     config=experiment.config; run=experiment.process(data)
-    if run["status"]!="success": raise ValueError("；".join(run.get("errors",[])) or "没有可处理的数据")
     tables=[]; figures=[]; analysis=[]
     methods={m["id"]:m for m in config["methods"]}
+    # 必做子实验缺项不再阻断报告：未算出结果的必做项在正文里标注为缺项并留空，
+    # 其余已提交的数据照常计算，避免一条不完整的必做表让整份报告无法导出。
+    missing=[m for m in config["methods"] if m.get("required") and m["id"] not in run["results"]]
+    if not run["results"] and not missing:
+        raise ValueError("；".join(run.get("errors",[])) or "没有可处理的数据")
+    if missing:
+        analysis.append({"kind":"h3","text":"必做项目缺项"})
+        analysis.append({"kind":"para","text":safe_text("、".join(m["name"] for m in missing)+"未提供完整数据，本报告将其标记为缺项，对应表格与计算结果留空。")})
     for method_id,result in run["results"].items():
         method=methods[method_id]; payload=data.get(method_id,{})
         if method.get("params"):
@@ -173,4 +180,9 @@ def report_blocks(experiment, data: dict) -> list[dict]:
 
 def report_bytes(experiment, data: dict, fmt: str) -> bytes:
     blocks=report_blocks(experiment,data)
-    return docbuild.render_docx(blocks,landscape=False) if fmt=="docx" else docbuild.render_pdf(blocks,landscape=False)
+    if fmt=="docx": return docbuild.render_docx(blocks,landscape=False)
+    if fmt=="pdf": return docbuild.render_pdf(blocks,landscape=False)
+    from experiments.core.report_export import export_bytes
+    return export_bytes(blocks,fmt,experiment_id=experiment.id,
+                        experiment_name=experiment.config["name"],
+                        title=f"{experiment.config['name']} · 完整报告")

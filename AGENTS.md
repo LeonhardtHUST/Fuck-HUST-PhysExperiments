@@ -64,6 +64,16 @@ python -m ocr_dataset.templates --check                        # 必须通过
 
 数据表支持自由增删行，校验按配置里的最小行数放行（见提交 `19d8054`、`ead6561`）。不要在新代码里假设固定行数或按空行截断。
 
+### 本地草稿只认 `physlab:draft:v1:<slug>`
+
+三个工作台（通用、声速光速、偏振光）的自动保存走 `frontend/src/hooks/useWorkspaceDraft.ts` + `frontend/src/lib/workspace-draft.ts`：
+
+- key 前缀固定 `physlab:draft:v1:`，`v1` 是草稿结构版本；改 `DraftPayload` 结构就递增版本，别在原版本上兼容旧数据。
+- 写入必须等 `ready`（配置/spec 就绪）与 `hydrated`（首帧基线已抓到）都为真；基线是 **restore 之前** 的快照，当前序列化 ≠ 基线才写入，等于基线则删 key。这条是“打开页面不产生草稿、不误报已恢复”的唯一依据。
+- 清空“全部”只遍历前缀，禁止 `localStorage.clear()`（会连带删掉 `physicslab-anonymous-session`、`physlab:admin-key`）。
+- 草稿快照/恢复 **不要** 复用 `collectArtifact`/`encodeArtifact`：导出链路会裁末尾空行、把数值字符串转成数字，草稿必须原样保留半成品输入（`-`、`1e`）与额外空行。
+- 清空后必须一并清 `result`/`processed`/`step` 等派生状态，避免“数据空了结果还在”。
+
 ## 踩坑记录
 
 ### 1. OCR 样本测试失败≠代码 bug
@@ -140,6 +150,45 @@ python -m ocr_dataset.templates --check                        # 必须通过
 - **CORS 只对 CloudBase 云托管生效**：`deploy/cloudbase.env.json` 的 `CORS_ORIGINS` 是容器环境变量；后端跑在别处（如 Google Cloud Run）要改那边，否则页面能打开、接口全被浏览器拦。验证方式：带 `Origin: <站点域名>` 请求 `/health`，看响应头是否有 `Access-Control-Allow-Origin`。
 - **首次前端构建约 8 分钟**（本机 Turbopack 全量编译），按第 3 条后台重定向 + 轮询，不要前台干等；`frontend/out` 与 `.dev-logs/` 已被忽略，别提交。
 - **环境变量是全量覆盖**：`--env-params` 整体替换线上变量，改配置只改 `deploy/cloudbase.env.json`。
+
+### 12. 用编辑工具改 CRLF 文件会得到整文件 diff
+
+`backend/experiments/polarization/docbuild.py` 在工作区是 CRLF（仓库没有 `.gitattributes`）。用按行拼接的编辑工具改一段代码，会把整个文件归一成 LF，`git diff` 看起来像重写了 700 行：
+
+```
+git --no-pager diff --numstat -- <path>                     # 增删行数 ≈ 文件行数
+git --no-pager diff --ignore-cr-at-eol --numstat -- <path>  # 只剩真实改动行数
+```
+
+处置：`git checkout -- <path>` 还原，再用 Python 按字节替换（`d.replace(b"""old""", b"""new""")`，中文直接写进字节串），这样换行不变。不要用 `Path.write_text` 重建整份文件。
+
+### 13. 完成度卡片新增按钮会掉成孤行
+
+`GenericExperimentWorkspace` 底部的「必做实验完成度」卡片是 `sm:flex-row sm:items-center`，右侧按钮组原来只有 3 个；再加两个完整报告格式后，1280 宽下第 5 个按钮会换到下一行并停在左侧文字下方，看起来像错位。
+
+处置：右侧改成上下两行容器（`flex-col items-end`）：主行 `预览结果 / 报告 Word / 报告 PDF`，次行 `更多格式 Markdown / JSONC`（`h-8` 小号描边按钮）。验证要看 `getBoundingClientRect().right <= innerWidth` 并截图，别只跑类型检查。
+
+### 14. 草稿表 id 与工作台 cell key 不是一回事
+
+`soundlight` 的 spec 表 id 是 `${methodId}-${tableIndex}`（草稿、`DRAFT_TABLE_OPTIONS` 都用它），但 `SoundLightWorkspace` 内部 `cell` 的 key 是 `${methodId}#${tableIndex}`。恢复时若把 `rowsToGrid` 的结果写进 `${id}-${ti}`，`getRows` 读不到 → 页面仍是空表；随后自动保存又会把“空的当前状态”写回，key 被删，症状是「刷新后数据全没了，而且提示条消失」。验证方式：填值 → 刷新 → 单元格必须有值且出现提示条。
+
+### 15. `fixed inset-0` 弹窗会被卡片的 `backdrop-filter` 收进卡片
+
+工作台卡片用了 `backdrop-blur`，它会给后代 `fixed` 元素创建包含块，遮罩不再是视口大小：1280×720 下确认弹窗 `top` 量到 580、`bottom` 741 直接出屏。处置：`WorkspaceDraftControls` 的确认框用 `createPortal(..., document.body)` 挂到 body。判断方法：`document.querySelector('[role=dialog]').getBoundingClientRect()` 的 `bottom` 必须 ≤ `innerHeight`。
+
+### 16. 下拉菜单在矮视口会被底边裁掉
+
+“清空数据”菜单约 360px 高；声光工作台按钮位于 y≈420（720 视口），向下展开会越过底边，末档「清空所有实验的数据」点不到。处置：打开时按 `innerHeight - rect.bottom < 420` 决定向上展开，并给面板 `maxHeight: min(26rem, calc(100dvh - 7rem))` + `flex flex-col`，列表区 `flex-1 overflow-y-auto`、头尾 `shrink-0`，保证三档按钮始终可见。380px 窄屏还要复查 `document.documentElement.scrollWidth === innerWidth`。
+
+### 17. reload 后整屏 `chrome-error` / 502 ≠ 服务挂了
+
+`next dev` 按需编译期间 reload，浏览器可能落到 `chrome-error://chromewebdata/`，此时 `localStorage` 访问报 `SecurityError`、`Invoke-WebRequest` 也可能拿到 502，看起来像后端崩了。先查端口：
+
+```
+Get-NetTCPConnection -LocalPort 8001,3000 -State Listen -ErrorAction SilentlyContinue
+```
+
+有监听就重新 `goto` 同一深链（必要时等 2s），没有监听才按「本地运行（开发者）」重新 `npm run dev -- --detach --no-browser`。别在报错页上继续 `eval` 判断业务逻辑。
 
 ## 提交习惯
 

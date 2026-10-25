@@ -6,6 +6,7 @@ substitute for complete real laboratory records.
 
 import io
 import math
+import re
 import zipfile
 
 import fitz
@@ -419,34 +420,45 @@ def test_catalogue_and_generic_api_contract():
     assert response.json()["status"] == "success"
 
 
-@pytest.mark.document
+def _docx_text(content: bytes) -> str:
+    with zipfile.ZipFile(io.BytesIO(content)) as archive:
+        xml = archive.read("word/document.xml").decode("utf-8")
+    return re.sub(r"<[^>]+>", "", xml)
+
+
+def _report_texts(experiment_id, data) -> list[str]:
+    blocks = docs.report_blocks(registry.get(experiment_id), data)
+    return [block.get("text", "") for block in blocks if block.get("text")]
+
+
 @pytest.mark.parametrize("experiment_id", [item["id"] for item in CONFIGS])
-def test_general_report_rejects_data_when_required_methods_are_missing(experiment_id):
-    client = TestClient(app)
+def test_general_report_marks_missing_required_methods_as_omissions(experiment_id):
     config = next(item for item in CONFIGS if item["id"] == experiment_id)
     first_required = next(method for method in config["methods"] if method["required"])
     data = dict(fixtures()[experiment_id])
     data.pop(first_required["id"])
-    response = client.post(
-        f"/api/experiments/{experiment_id}/report?fmt=pdf",
-        json={"data": data},
-    )
-    assert response.status_code == 400
-    assert "必做实验" in response.json()["detail"]
-    assert first_required["name"] in response.json()["detail"]
+
+    texts = _report_texts(experiment_id, data)
+
+    assert "必做项目缺项" in texts
+    assert any(first_required["name"] in text and "缺项" in text for text in texts)
 
 
 @pytest.mark.document
-def test_general_report_rejects_an_incomplete_required_table():
+def test_general_report_renders_with_an_incomplete_required_table():
     client = TestClient(app)
     data = fixtures()["multimeter"]
     data["voltage"]["rows"][-1]["measured"] = None
+
     response = client.post(
-        "/api/experiments/multimeter/report?fmt=pdf",
+        "/api/experiments/multimeter/report?fmt=docx",
         json={"data": data},
     )
-    assert response.status_code == 400
-    assert "直流电压" in response.json()["detail"]
+
+    assert response.status_code == 200
+    text = _docx_text(response.content)
+    assert "缺项" in text
+    assert "直流电压" in text
 
 
 def test_lecture_required_and_optional_content_is_represented():

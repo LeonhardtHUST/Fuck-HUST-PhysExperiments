@@ -30,6 +30,8 @@ MIME_BY_EXTENSION = {
     "jpeg": "image/jpeg",
     "svg": "image/svg+xml",
     "json": "application/json",
+    "jsonc": "application/jsonc",
+    "md": "text/markdown",
     "txt": "text/plain",
 }
 EXTENSION_BY_MIME = {
@@ -73,7 +75,7 @@ def _write(content: bytes, label: str, extension: str) -> dict[str, Any]:
 
 
 def save_bytes(content: bytes, *, label: str, fmt: str) -> dict[str, Any]:
-    """Write a document (``docx`` / ``pdf``) and describe where it landed."""
+    """Write a document (``docx``/``pdf``/``md``/``jsonc``) and describe where it landed."""
     if not content:
         raise ValueError("生成的文档为空")
     return _write(content, label, fmt)

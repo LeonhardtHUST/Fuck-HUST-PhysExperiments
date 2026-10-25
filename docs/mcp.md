@@ -43,7 +43,7 @@ python backend/mcp_server.py --check   # 等价的手写方式
 | `get_data_reference` | 该实验的「数据特征参考」：典型量级、填写规律、常见错误 | 否 |
 | `validate_experiment_data` | 只校验，返回 `{valid, errors, warnings}` | 否 |
 | `process_experiment_data` | 计算 + 误差分析 + 最小二乘拟合，返回 `results/derived/errors/plots` | 拟合图落盘 |
-| `generate_experiment_report` | Word / PDF 实验报告 | 是 |
+| `generate_experiment_report` | Word / PDF / Markdown / JSONC 实验报告 | 是 |
 | `generate_record_sheet` | 空白数据记录表（打印后手写） | 是 |
 | `recognize_record_sheet` | 手写记录表照片 → 数值候选（需人工确认） | 否 |
 
@@ -90,6 +90,7 @@ python backend/mcp_server.py --check   # 等价的手写方式
 
 - 默认目录：系统临时目录下的 `physlab-mcp/`；用 `PHYSICSLAB_MCP_OUTPUT_DIR` 指定固定目录。
 - 文件名格式：`<实验名>-<用途>-<时间戳>-<6 位随机>.<ext>`，已清洗 Windows 非法字符，不会覆盖旧文件。
+- 报告支持 `fmt=docx|pdf|md|jsonc`；文本格式的 `mime` 为 `text/markdown` / `application/jsonc`，结构见 [report-format.md](report-format.md)。空白记录表仍只支持 `docx` / `pdf`。
 - `process_experiment_data` 的 `plots` 值会被替换为 `{path, mime, bytes, filename}`；给 `inline_plots=true` 时才返回 `data:image/png;base64,…`（大响应，仅在需要直接看图时用）。
 - 只读工具（清单/config/schema/校验）不产生任何文件。
 
@@ -168,7 +169,7 @@ CodeBuddy：设置 → MCP → Add MCP，在打开的 JSON 里填；Claude Deskt
 | Windows 路径写不对 | TOML 用正斜杠或双反斜杠；JSON 里用正斜杠（`"D:/..."`）。别用单反斜杠，会被当转义符 |
 | 第一次调用等 1~3 秒 | 正常：`numpy` / `matplotlib` / `python-docx` 的导入开销；之后同一进程内是毫秒级 |
 | 客户端说「无法解析响应」 | 说明有东西写进了 stdout。stdio 下 stdout 只属于协议帧，日志必须走 stderr，任何 `print()` 都要删掉；`MPLBACKEND` 已由入口脚本强制为 `Agg` |
-| 报告返回错误「请先填写完全部必做实验：…」 | 必做子实验没填完整；先 `validate_experiment_data` 看 `errors`，或补齐必做方法的行 |
+| 报告里出现「必做项目缺项」 | 必做子实验没填完整或未通过校验；报告仍会生成，该部分留空。要补全就先 `validate_experiment_data` 看 `errors`，补齐后重新生成 |
 | 找不到生成的报告 | 看返回的 `file.path`（绝对路径）；想固定位置就设 `PHYSICSLAB_MCP_OUTPUT_DIR` |
 | 自测脚本卡死并留下 `python.exe` | 若用 `mcp.client.stdio.stdio_client` 起子进程，Windows 上退出阶段可能挂住。收尾要显式关闭 stdin 再 kill，或用 `Get-CimInstance Win32_Process` 找到 `mcp_server.py` 后 `taskkill /PID <pid> /T /F` |
 

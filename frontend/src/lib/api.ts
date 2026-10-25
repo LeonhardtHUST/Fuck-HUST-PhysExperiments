@@ -334,8 +334,11 @@ export async function previewRecordSheet(
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
+/** 完整报告可选的导出格式；docx/pdf 为排版稿，md/jsonc 为文本稿。 */
+export type ReportFormat = "docx" | "pdf" | "md" | "jsonc";
+
 export async function downloadReport(
-  fmt: "docx" | "pdf",
+  fmt: ReportFormat,
   data: ProcessRequest,
   expId: string = "polarization"
 ): Promise<void> {
@@ -403,7 +406,7 @@ export type SoundLightMethodData = Record<
 >;
 
 export async function downloadSoundLightReport(
-  fmt: "docx" | "pdf",
+  fmt: ReportFormat,
   data: SoundLightMethodData
 ): Promise<void> {
   const res = await fetch(
@@ -540,7 +543,7 @@ export async function validateGenericExperiment(
 
 export async function downloadGenericReport(
   id: string,
-  fmt: "docx" | "pdf",
+  fmt: ReportFormat,
   data: GenericExperimentData
 ): Promise<void> {
   const res = await fetch(`${API_BASE}/api/experiments/${id}/report?fmt=${fmt}`, {

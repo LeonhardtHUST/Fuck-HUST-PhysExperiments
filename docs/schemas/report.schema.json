@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://physlab.local/schemas/report.schema.json",
+  "title": "PhysicsLab 完整报告（JSONC）",
+  "description": "`POST /api/experiments/{id}/report?fmt=jsonc` 的产物。文件头部有若干 // 注释行，按 JSONC 读取；去掉注释后即可用本 schema 校验。",
+  "type": "object",
+  "required": ["schemaVersion", "kind", "generator", "generatedAt", "experiment", "title", "content"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "description": "报告文档结构的版本号；字段或块类型不兼容变更时递增。"
+    },
+    "kind": {
+      "const": "physlab.report",
+      "description": "文档类型标识，用于与数据 artifact 区分。"
+    },
+    "generator": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "生成时刻，UTC、ISO 8601，例如 2026-10-25T08:30:00Z。"
+    },
+    "experiment": {
+      "type": "object",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 }
+      }
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "content": {
+      "type": "array",
+      "description": "按文档顺序排列的内容块；纯排版块（spacer）已剔除。",
+      "items": { "$ref": "#/$defs/block" }
+    }
+  },
+  "$defs": {
+    "block": {
+      "oneOf": [
+        { "$ref": "#/$defs/heading" },
+        { "$ref": "#/$defs/subheading" },
+        { "$ref": "#/$defs/paragraph" },
+        { "$ref": "#/$defs/note" },
+        { "$ref": "#/$defs/table" },
+        { "$ref": "#/$defs/equation" },
+        { "$ref": "#/$defs/figure" },
+        { "$ref": "#/$defs/ruledLines" },
+        { "$ref": "#/$defs/pageBreak" }
+      ]
+    },
+    "text": {
+      "type": "string"
+    },
+    "heading": {
+      "type": "object",
+      "description": "标题。h1 通常只出现在自带章标题的实验（声光）中。",
+      "required": ["kind", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["h1", "h2", "h3"] },
+        "text": { "$ref": "#/$defs/text" }
+      }
+    },
+    "subheading": {
+      "type": "object",
+      "description": "斜体小标题，如「（一）原始数据」。",
+      "required": ["kind", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "sub" },
+        "text": { "$ref": "#/$defs/text" }
+      }
+    },
+    "paragraph": {
+      "type": "object",
+      "required": ["kind", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "para" },
+        "text": { "$ref": "#/$defs/text" }
+      }
+    },
+    "note": {
+      "type": "object",
+      "description": "灰色小字注释或说明。",
+      "required": ["kind", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "note" },
+        "text": { "$ref": "#/$defs/text" }
+      }
+    },
+    "table": {
+      "type": "object",
+      "description": "表格；rows[0] 为表头，单元格按行列展开为纯文本（空单元格为 \"\"）。",
+      "required": ["kind", "rows"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "table" },
+        "rows": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "equation": {
+      "type": "object",
+      "description": "行间公式（LaTeX 源码，不含 $$ 定界符）。",
+      "required": ["kind", "latex"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "equation" },
+        "latex": { "type": "string" }
+      }
+    },
+    "figure": {
+      "type": "object",
+      "description": "图片；base64 为不含 data URI 前缀的裸编码。",
+      "required": ["kind", "mime", "base64"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "figure" },
+        "mime": { "enum": ["image/png", "image/jpeg", "image/svg+xml"] },
+        "base64": { "type": "string", "minLength": 1 },
+        "caption": { "type": "string" }
+      }
+    },
+    "ruledLines": {
+      "type": "object",
+      "description": "手写留白横线区。",
+      "required": ["kind", "count"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "ruledLines" },
+        "count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "pageBreak": {
+      "type": "object",
+      "description": "分页符，通常出现在 PDF/Word 的段落之间。",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "pageBreak" }
+      }
+    }
+  }
+}

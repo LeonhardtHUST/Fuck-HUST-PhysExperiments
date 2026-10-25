@@ -1405,7 +1405,15 @@ def report_bytes(data: dict, bg_uw: float = 0.0,
     blocks = report_blocks(run, data)
     if fmt == "docx":
         return render_docx(blocks)
-    return render_pdf(blocks)
+    if fmt == "pdf":
+        return render_pdf(blocks)
+    from experiments.core.report_export import export_bytes
+    return export_bytes(
+        blocks, fmt,
+        experiment_id="polarization",
+        experiment_name="偏振光与双折射",
+        title="偏振光与双折射 · 完整报告",
+    )
 
 
 def part_bytes(part: str, data: dict, bg_uw: float = 0.0,

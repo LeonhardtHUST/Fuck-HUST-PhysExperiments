@@ -1102,7 +1102,15 @@ def report_bytes(methods_data, fmt="docx", legacy_fmt=None) -> bytes:
     blocks = report_blocks(methods_data)
     if fmt == "docx":
         return render_docx(blocks)
-    return render_pdf(blocks)
+    if fmt == "pdf":
+        return render_pdf(blocks)
+    from experiments.core.report_export import export_bytes
+    return export_bytes(
+        blocks, fmt,
+        experiment_id="sound-light",
+        experiment_name="声速光速的测量",
+        title="声速光速的测量 · 完整报告",
+    )
 
 
 def record_bytes(fmt: str = "docx") -> bytes:

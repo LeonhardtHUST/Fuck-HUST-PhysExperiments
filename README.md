@@ -7,7 +7,7 @@ PhysLab 是一个面向大学物理实验的 AI 助手。它帮助学生完成�
 - **实验数据录入** —— 手写记录表拍照上传，自动识别成数据
 - **数据处理** —— 计算、误差分析、最小二乘拟合
 - **曲线绘制** —— 结果图自动生成并按报告规范排版
-- **实验报告** —— 一键导出含数据表、图像与计算结果的 Word / PDF
+- **实验报告** —— 一键导出含数据表、图像与计算结果的 Word / PDF，也可下载 Markdown / JSONC
 
 > PhysLab **不替代实验**。纸笔记录、动手操作、观察现象仍是实验课的核心；PhysLab 只是把实验之后的数据处理与出图变成一分钟的事。
 
@@ -56,7 +56,7 @@ PhysLab 是一个面向大学物理实验的 AI 助手。它帮助学生完成�
 | 3. AI 辅助识别数据 | 系统按实验模板切出每个数值并给出识别结果 |
 | 4. 检查并修改数据 | 逐项确认；表格里可以直接改，超范围会给出提示 |
 | 5. 自动计算和绘图 | 点击处理后自动完成计算、拟合与出图 |
-| 6. 生成实验报告 | 下载 Word / PDF 报告，含数据表、图像与计算结果 |
+| 6. 生成实验报告 | 下载 Word / PDF 报告（或 Markdown / JSONC），含数据表、图像与计算结果 |
 
 <p align="center">
   <img src="docs/images/home.png" alt="PhysLab 首页" width="720">
@@ -137,7 +137,7 @@ PhysLab 负责采集与切分，[PhysLab_OCR](https://github.com/Bogger111/PhysL
 - 支持 12 个大学物理实验的录入、计算、绘图与报告
 - 支持实验记录表 OCR 辅助录入（候选值须人工确认）
 - 支持 AI 实验数据共建闭环：采集 → 确认 → 切分 → 训练集导出
-- 后端 570 项、前端 93 项自动测试全部通过（后端另有 3 项跳过：缺 `.env.local` 与未暴露公式的实验）
+- 后端 581 项、前端 93 项自动测试全部通过（后端另有 3 项跳过：缺 `.env.local` 与未暴露公式的实验）
 
 **未来**
 
@@ -256,7 +256,7 @@ PHYSICSLAB_DEV_MODE=true        # 打开开发者统计面板
 
 ### MCP Server（可选，仅本地）
 
-PhysLab 也能作为 MCP Server 被 AI 客户端（codex / opencode / CodeBuddy / Claude Desktop）直接调用：选实验、校验数据、计算绘图、生成 Word/PDF 报告与记录表。它与网页**共用同一套计算核心**。
+PhysLab 也能作为 MCP Server 被 AI 客户端（codex / opencode / CodeBuddy / Claude Desktop）直接调用：选实验、校验数据、计算绘图、生成 Word/PDF/Markdown/JSONC 报告与记录表。它与网页**共用同一套计算核心**。
 
 **MCP 只在本机运行**：不监听端口、不走网络、不随 `npm run deploy` 或云端镜像一起部署——`backend/Dockerfile` 不打包它，`backend/.dockerignore` 也把它排除在构建上下文外。上云的只有 `uvicorn` 暴露的 HTTP 后端。
 
@@ -281,7 +281,7 @@ npm run mcp            # 前台启动 stdio 服务器，Ctrl+C 结束；AI 客�
 
 配置写法、工具清单、`data` 三种结构与排障见 [docs/mcp.md](docs/mcp.md)。
 
-更多细节见 [docs/physkiller-2.0.md](docs/physkiller-2.0.md)（架构与流水线）、[docs/screenshots.md](docs/screenshots.md)（截图清单）、[CHANGELOG.md](CHANGELOG.md)（发布说明）。
+更多细节见 [docs/physkiller-2.0.md](docs/physkiller-2.0.md)（架构与流水线）、[docs/report-format.md](docs/report-format.md)（报告导出格式与 JSONC schema）、[docs/screenshots.md](docs/screenshots.md)（截图清单）、[CHANGELOG.md](CHANGELOG.md)（发布说明）。
 
 ## 部署到 CloudBase
 
