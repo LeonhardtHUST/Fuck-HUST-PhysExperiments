@@ -17,6 +17,8 @@ import {
   FileDown,
   RefreshCw,
   Loader2,
+  FileCode2,
+  FileType,
   AlertCircle,
   CheckCircle2,
   Eye,
@@ -33,6 +35,7 @@ import {
   downloadReport,
   type ProcessRequest,
   type ProcessResponse,
+  type ReportFormat,
 } from "@/lib/api";
 import DataInputTable from "@/components/workspace/DataInputTable";
 import ArtifactActions from "@/components/workspace/ArtifactActions";
@@ -40,12 +43,20 @@ import ArtifactRemarks from "@/components/workspace/ArtifactRemarks";
 import { rowIndexValue } from "@/lib/table-specs";
 import { getExperimentSpec } from "@/lib/experiment-specs";
 import type { ArtifactInput } from "@/lib/experiment-artifact";
-import { mergeArtifactNotes, type ArtifactNotes, type DecodeOk } from "@/lib/artifact-scope";
+import {
+  hasArtifactNotes,
+  mergeArtifactNotes,
+  type ArtifactNotes,
+  type DecodeOk,
+} from "@/lib/artifact-scope";
 import { trimTrailingEmptyRows } from "@/components/workspace/table-rows";
+import { DraftClearMenu, DraftRestoreBanner } from "@/components/workspace/WorkspaceDraftControls";
 import DataContributionPanel from "@/components/workspace/DataContributionPanel";
 import SoundLightWorkspace from "@/components/workspace/SoundLightWorkspace";
 import GenericExperimentWorkspace from "@/components/workspace/GenericExperimentWorkspace";
 import { useDataCollection } from "@/hooks/useDataCollection";
+import { useWorkspaceDraft } from "@/hooks/useWorkspaceDraft";
+import type { DraftPayload } from "@/lib/workspace-draft";
 import { POLARIZATION_WORKSPACE_STEPS } from "@/components/workspace/workspace-entry-flow";
 import { cn } from "@/lib/utils";
 import { getInputRange, isOutsideRange, rangeLabel } from "@/lib/input-ranges";
@@ -70,6 +81,54 @@ const SUB_ICON: Record<string, React.ElementType> = {
 /** 偏振光的表头/只读角度规则与 artifact 共用同一份声明式定义。 */
 const POLARIZATION_SPEC = getExperimentSpec("polarization");
 
+const EMPTY_NOTES: ArtifactNotes = { remarks: null, tableRemarks: {}, computed: {} };
+
+/** 页面默认值：清空与「首次打开」必须完全一致，否则会误判成有草稿。 */
+const DEFAULT_SETUP = { bg_uw: "0.0543", theta_qwp: "30" } as const;
+
+function initialHwInit() {
+  return { c_deg: "", c_min: "", p2_deg: "", p2_min: "" };
+}
+
+function initialMalus(): string[][] {
+  return Array.from({ length: 10 }, (_, index) => [String(90 - index * 10), "", ""]);
+}
+
+function initialHalfwave(): string[][] {
+  return Array.from({ length: 6 }, (_, index) => [String(index * 10), "", "", "", ""]);
+}
+
+function initialAngle(): string[][] {
+  return Array.from({ length: 36 }, (_, index) => [String(index * 10), ""]);
+}
+
+const TABLE_RESET: Record<string, () => string[][]> = {
+  malus: initialMalus,
+  halfwave: initialHalfwave,
+  quarterwave: initialAngle,
+  circular: initialAngle,
+};
+
+function gridToRecords(tableId: string, grid: string[][]): Record<string, string>[] {
+  const table = POLARIZATION_SPEC.tables.find((item) => item.tableId === tableId);
+  if (!table) return [];
+  return grid.map((row) =>
+    Object.fromEntries(table.columns.map((column, index) => [column.key, row[index] ?? ""]))
+  );
+}
+
+/** 只读角度列按行序重建，与导入/增行的规则一致。 */
+function recordsToGrid(tableId: string, records: Record<string, string>[]): string[][] {
+  const table = POLARIZATION_SPEC.tables.find((item) => item.tableId === tableId);
+  if (!table) return [];
+  return records.map((record, rowIndex) =>
+    table.columns.map((column) => {
+      const derived = rowIndexValue(column, rowIndex);
+      return derived !== undefined ? String(derived) : (record[column.key] ?? "");
+    })
+  );
+}
+
 function numberOrNull(value: string): number | null {
   if (value.trim() === "") return null;
   const parsed = Number(value);
@@ -92,35 +151,22 @@ function PolarizationWorkspace({
   const [activeTab, setActiveTab] = useState("malus");
 
   // Setup
-  const [bgUw, setBgUw] = useState("0.0543");
-  const [thetaQwp, setThetaQwp] = useState("30");
+  const [bgUw, setBgUw] = useState<string>(DEFAULT_SETUP.bg_uw);
+  const [thetaQwp, setThetaQwp] = useState<string>(DEFAULT_SETUP.theta_qwp);
 
   // Malus data: 90,80,...,0
-  const [malusData, setMalusData] = useState<string[][]>(
-    Array.from({ length: 10 }, (_, i) => [String(90 - i * 10), "", ""])
-  );
+  const [malusData, setMalusData] = useState<string[][]>(initialMalus);
 
   // HalfWave initial
-  const [hwInit, setHwInit] = useState({
-    c_deg: "",
-    c_min: "",
-    p2_deg: "",
-    p2_min: "",
-  });
+  const [hwInit, setHwInit] = useState(initialHwInit);
   // HalfWave rows
-  const [hwData, setHwData] = useState<string[][]>(
-    Array.from({ length: 6 }, (_, i) => [String(i * 10), "", "", "", ""])
-  );
+  const [hwData, setHwData] = useState<string[][]>(initialHalfwave);
 
   // QuarterWave: 36 rows
-  const [qwData, setQwData] = useState<string[][]>(
-    Array.from({ length: 36 }, (_, i) => [String(i * 10), ""])
-  );
+  const [qwData, setQwData] = useState<string[][]>(initialAngle);
 
   // Circular: 36 rows
-  const [circData, setCircData] = useState<string[][]>(
-    Array.from({ length: 36 }, (_, i) => [String(i * 10), ""])
-  );
+  const [circData, setCircData] = useState<string[][]>(initialAngle);
 
   // Results
   const [loading, setLoading] = useState(false);
@@ -190,7 +236,7 @@ function PolarizationWorkspace({
     };
   }, [bgUw, thetaQwp, malusData, hwInit, hwData, qwData, circData]);
 
-  const downloadFinalReport = async (format: "docx" | "pdf") => {
+  const downloadFinalReport = async (format: ReportFormat) => {
     const data = buildRequest();
     await downloadReport(format, data);
     await collection.commit(data);
@@ -282,6 +328,74 @@ function PolarizationWorkspace({
       return { ...previous, tableRemarks };
     });
   };
+
+  // ---- local draft (localStorage) ----
+  const applyDraftPayload = (payload: DraftPayload) => {
+    setMalusData(recordsToGrid("malus", payload.tables.malus?.rows ?? []));
+    setHwData(recordsToGrid("halfwave", payload.tables.halfwave?.rows ?? []));
+    setQwData(recordsToGrid("quarterwave", payload.tables.quarterwave?.rows ?? []));
+    setCircData(recordsToGrid("circular", payload.tables.circular?.rows ?? []));
+
+    const halfwaveParams = payload.tables.halfwave?.params ?? {};
+    setHwInit({
+      c_deg: halfwaveParams.c_deg ?? "",
+      c_min: halfwaveParams.c_min ?? "",
+      p2_deg: halfwaveParams.p2_deg ?? "",
+      p2_min: halfwaveParams.p2_min ?? "",
+    });
+    setBgUw(payload.setupParams.bg_uw ?? DEFAULT_SETUP.bg_uw);
+    setThetaQwp(payload.setupParams.theta_qwp ?? DEFAULT_SETUP.theta_qwp);
+
+    setNotes(hasArtifactNotes(payload.notes) ? payload.notes : null);
+    setResult(null);
+    setError(null);
+  };
+
+  const snapshotDraft = (): DraftPayload => ({
+    setupParams: { bg_uw: bgUw, theta_qwp: thetaQwp },
+    tables: {
+      malus: { rows: gridToRecords("malus", malusData), params: {} },
+      halfwave: { rows: gridToRecords("halfwave", hwData), params: { ...hwInit } },
+      quarterwave: { rows: gridToRecords("quarterwave", qwData), params: {} },
+      circular: { rows: gridToRecords("circular", circData), params: {} },
+    },
+    notes: notes ?? EMPTY_NOTES,
+  });
+
+  const resetTable = (tableId: string) => {
+    const factory = TABLE_RESET[tableId];
+    if (!factory) return;
+    if (tableId === "malus") setMalusData(factory());
+    else if (tableId === "halfwave") {
+      setHwData(factory());
+      setHwInit(initialHwInit());
+    } else if (tableId === "quarterwave") setQwData(factory());
+    else setCircData(factory());
+    clearTableNotes(tableId);
+    setResult(null);
+    setError(null);
+  };
+
+  const resetAll = () => {
+    setBgUw(DEFAULT_SETUP.bg_uw);
+    setThetaQwp(DEFAULT_SETUP.theta_qwp);
+    setHwInit(initialHwInit());
+    setMalusData(initialMalus());
+    setHwData(initialHalfwave());
+    setQwData(initialAngle());
+    setCircData(initialAngle());
+    setNotes(null);
+    setResult(null);
+    setError(null);
+    setStep("input");
+  };
+
+  const draftStore = useWorkspaceDraft({
+    experimentId: POLARIZATION_SPEC.id,
+    spec: POLARIZATION_SPEC,
+    snapshot: snapshotDraft,
+    restore: applyDraftPayload,
+  });
 
   // ---- derived fill stats (same per-sub heuristics as submission) ----
   const fills = {
@@ -518,7 +632,15 @@ function PolarizationWorkspace({
               </p>
             </div>
 
-            <div className="mb-4 flex flex-wrap justify-end">
+            <DraftRestoreBanner
+              restoredAt={draftStore.restoredAt}
+              onDismiss={draftStore.dismissRestored}
+              controller={draftStore}
+              onReset={resetAll}
+              className="mb-4"
+            />
+
+            <div className="mb-4 flex flex-wrap justify-end gap-2">
               <ArtifactActions
                 experimentId={experiment.id}
                 scope={{ kind: "experiment" }}
@@ -528,6 +650,15 @@ function PolarizationWorkspace({
                 tableRemarks={notes?.tableRemarks}
                 computed={notes?.computed}
                 onClearRemarks={() => setNotes(null)}
+              />
+              <DraftClearMenu
+                tables={POLARIZATION_SPEC.tables.map((table) => ({
+                  id: table.tableId,
+                  title: table.title,
+                }))}
+                controller={draftStore}
+                onClearTable={resetTable}
+                onReset={resetAll}
               />
             </div>
 
@@ -1041,7 +1172,7 @@ function PolarizationWorkspace({
                       A4 纵向紧凑排版，四部分强制分页；表格整表保留，公式以 LaTeX 风格展示
                     </p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => runDownload("report-docx", () => downloadFinalReport("docx"))}
                       disabled={busyKey !== null}
@@ -1057,6 +1188,24 @@ function PolarizationWorkspace({
                     >
                       {busyKey === "report-pdf" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                       紧凑 PDF
+                    </button>
+                    <button
+                      onClick={() => runDownload("report-md", () => downloadFinalReport("md"))}
+                      disabled={busyKey !== null}
+                      title="下载 Markdown 版完整报告"
+                      className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white text-xs font-semibold text-stone-700 transition-colors hover:border-stone-400 disabled:opacity-50"
+                    >
+                      {busyKey === "report-md" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileType className="h-3.5 w-3.5" />}
+                      Markdown
+                    </button>
+                    <button
+                      onClick={() => runDownload("report-jsonc", () => downloadFinalReport("jsonc"))}
+                      disabled={busyKey !== null}
+                      title="下载 JSONC 版完整报告，结构见 docs/schemas/report.schema.json"
+                      className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white text-xs font-semibold text-stone-700 transition-colors hover:border-stone-400 disabled:opacity-50"
+                    >
+                      {busyKey === "report-jsonc" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileCode2 className="h-3.5 w-3.5" />}
+                      JSONC
                     </button>
                   </div>
                 </div>

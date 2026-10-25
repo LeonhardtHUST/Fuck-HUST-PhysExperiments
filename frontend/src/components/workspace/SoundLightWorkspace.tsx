@@ -9,6 +9,8 @@ import {
   ChartSpline,
   FileDown,
   Download,
+  FileCode2,
+  FileType,
   Eye,
   Loader2,
   AlertCircle,
@@ -29,9 +31,18 @@ import ArtifactRemarks from "@/components/workspace/ArtifactRemarks";
 import { trimTrailingEmptyRows } from "@/components/workspace/table-rows";
 import DataContributionPanel from "@/components/workspace/DataContributionPanel";
 import { SOUND_LIGHT_LAYOUTS } from "@/lib/soundlight-layouts";
+import { DraftClearMenu, DraftRestoreBanner } from "@/components/workspace/WorkspaceDraftControls";
 import type { ArtifactInput } from "@/lib/experiment-artifact";
-import { mergeArtifactNotes, type ArtifactNotes, type DecodeOk } from "@/lib/artifact-scope";
+import {
+  hasArtifactNotes,
+  mergeArtifactNotes,
+  type ArtifactNotes,
+  type DecodeOk,
+} from "@/lib/artifact-scope";
+import { getExperimentSpec } from "@/lib/experiment-specs";
+import { gridToRows, rowsToGrid, type DraftPayload } from "@/lib/workspace-draft";
 import { useDataCollection } from "@/hooks/useDataCollection";
+import { useWorkspaceDraft } from "@/hooks/useWorkspaceDraft";
 import { SOUND_LIGHT_WORKSPACE_STEPS } from "@/components/workspace/workspace-entry-flow";
 import soundLightConfig from "../../../../backend/experiments/soundlight/config.json";
 import {
@@ -40,6 +51,7 @@ import {
   downloadRecordSheet,
   previewRecordSheet,
   downloadSoundLightReport,
+  type ReportFormat,
   type SoundLightProcessResponse,
 } from "@/lib/api";
 
@@ -162,6 +174,27 @@ const METHOD_ICON: Record<string, React.ElementType> = {
   light_square: Gauge,
   light_lissajous: Orbit,
 };
+
+/** 草稿以 spec 的 tableId 为准（`${method}-${tableIndex}`），序号列不写入草稿。 */
+const SPEC = getExperimentSpec(EXP_ID);
+const SPEC_TABLES = new Map(SPEC.tables.map((table) => [table.tableId, table]));
+
+const DRAFT_TABLE_OPTIONS = METHODS.flatMap((mspec) =>
+  mspec.tables.map((table, tableIndex) => ({
+    id: `${mspec.id}-${tableIndex}`,
+    title: table.title ? `${mspec.name} · ${table.title}` : mspec.name,
+  }))
+);
+
+const EMPTY_NOTES: ArtifactNotes = { remarks: null, tableRemarks: {}, computed: {} };
+
+function splitTableId(tableId: string): { methodId: string; tableIndex: number } | null {
+  const separator = tableId.lastIndexOf("-");
+  if (separator <= 0) return null;
+  const tableIndex = Number(tableId.slice(separator + 1));
+  if (!Number.isInteger(tableIndex) || tableIndex < 0) return null;
+  return { methodId: tableId.slice(0, separator), tableIndex };
+}
 
 function _e(v: number | null | undefined): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return "";
@@ -412,6 +445,89 @@ export default function SoundLightWorkspace() {
     });
   };
 
+  // ---- local draft (localStorage) ----
+  const invalidateMethod = (methodId: string) => {
+    setProcessed((previous) => {
+      if (!(methodId in previous)) return previous;
+      const next = { ...previous };
+      delete next[methodId];
+      return next;
+    });
+    setCurrentResult((previous) => (previous === methodId ? null : previous));
+  };
+
+  /** 单表清空：丢掉该表的编辑态（getRows 会回落到讲义默认行），并让该方法结果失效。 */
+  const resetTable = (tableId: string) => {
+    const parsed = splitTableId(tableId);
+    if (!parsed) return;
+    const cellKey = `${parsed.methodId}#${parsed.tableIndex}`;
+    setCell((previous) => {
+      if (!(cellKey in previous)) return previous;
+      const next = { ...previous };
+      delete next[cellKey];
+      return next;
+    });
+    clearTableNotes(tableId);
+    invalidateMethod(parsed.methodId);
+    setError(null);
+  };
+
+  const resetAll = () => {
+    setCell({});
+    setParams({});
+    setNotes(null);
+    setProcessed({});
+    setCurrentResult(null);
+    setError(null);
+    setStep(SOUND_LIGHT_WORKSPACE_STEPS[0]);
+  };
+
+  const applyDraftPayload = (payload: DraftPayload) => {
+    const nextCell: Record<string, string[][]> = {};
+    const nextParams: Record<string, Record<string, string>> = {};
+    METHODS.forEach((mspec) => {
+      mspec.tables.forEach((_table, tableIndex) => {
+        const tableId = `${mspec.id}-${tableIndex}`;
+        const specTable = SPEC_TABLES.get(tableId);
+        const draftTable = payload.tables[tableId];
+        if (!specTable || !draftTable) return;
+        nextCell[`${mspec.id}#${tableIndex}`] = rowsToGrid(specTable, draftTable.rows, { serial: true });
+        nextParams[mspec.id] = { ...(nextParams[mspec.id] ?? {}), ...draftTable.params };
+      });
+    });
+    setCell(nextCell);
+    setParams(nextParams);
+    setNotes(hasArtifactNotes(payload.notes) ? payload.notes : null);
+    setProcessed({});
+    setCurrentResult(null);
+    setError(null);
+    setStep(SOUND_LIGHT_WORKSPACE_STEPS[0]);
+  };
+
+  const snapshotDraft = (): DraftPayload => {
+    const tables: DraftPayload["tables"] = {};
+    METHODS.forEach((mspec) => {
+      const methodParams = getParams(mspec.id);
+      mspec.tables.forEach((_table, tableIndex) => {
+        const tableId = `${mspec.id}-${tableIndex}`;
+        const specTable = SPEC_TABLES.get(tableId);
+        if (!specTable) return;
+        tables[tableId] = {
+          rows: gridToRows(specTable, getRows(mspec.id, tableIndex), 1),
+          params: methodParams,
+        };
+      });
+    });
+    return { setupParams: {}, tables, notes: notes ?? EMPTY_NOTES };
+  };
+
+  const draftStore = useWorkspaceDraft({
+    experimentId: EXP_ID,
+    spec: SPEC,
+    snapshot: snapshotDraft,
+    restore: applyDraftPayload,
+  });
+
   const buildPayload = useCallback(
     (mId: string) => {
       const mspec = METHODS.find((m) => m.id === mId)!;
@@ -513,7 +629,7 @@ export default function SoundLightWorkspace() {
     processedKeys.map((k) => [k, { rows: processed[k].rows, params: processed[k].params }])
   );
   const downloadFinalReport = async (
-    format: "docx" | "pdf",
+    format: ReportFormat,
     data: Record<string, { rows: Record<string, (number | null)[]>; params: Record<string, number> }>,
   ) => {
     await downloadSoundLightReport(format, data);
@@ -621,7 +737,15 @@ export default function SoundLightWorkspace() {
               </p>
             </div>
 
-            <div className="mb-4 flex flex-wrap justify-end">
+            <DraftRestoreBanner
+              restoredAt={draftStore.restoredAt}
+              onDismiss={draftStore.dismissRestored}
+              controller={draftStore}
+              onReset={resetAll}
+              className="mb-4"
+            />
+
+            <div className="mb-4 flex flex-wrap justify-end gap-2">
               <ArtifactActions
                 experimentId={EXP_ID}
                 scope={{ kind: "experiment" }}
@@ -631,6 +755,12 @@ export default function SoundLightWorkspace() {
                 tableRemarks={notes?.tableRemarks}
                 computed={notes?.computed}
                 onClearRemarks={() => setNotes(null)}
+              />
+              <DraftClearMenu
+                tables={DRAFT_TABLE_OPTIONS}
+                controller={draftStore}
+                onClearTable={resetTable}
+                onReset={resetAll}
               />
             </div>
 
@@ -751,7 +881,7 @@ export default function SoundLightWorkspace() {
                   )}
                 </p>
               </div>
-              <div className="flex shrink-0 gap-2">
+              <div className="flex shrink-0 flex-wrap justify-end gap-2">
                 <button
                   onClick={() =>
                     runDownload("quick-report-docx", () =>
@@ -775,6 +905,32 @@ export default function SoundLightWorkspace() {
                 >
                   {busyKey === "quick-report-pdf" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                   完整 · PDF
+                </button>
+                <button
+                  onClick={() =>
+                    runDownload("quick-report-md", () =>
+                      downloadFinalReport("md", filledAllReportData())
+                    )
+                  }
+                  disabled={busyKey !== null || !requiredAllFilled}
+                  title="下载 Markdown 版完整报告"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white px-4 text-xs font-semibold text-stone-700 transition-colors hover:border-stone-400 disabled:opacity-40"
+                >
+                  {busyKey === "quick-report-md" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileType className="h-3.5 w-3.5" />}
+                  完整 · MD
+                </button>
+                <button
+                  onClick={() =>
+                    runDownload("quick-report-jsonc", () =>
+                      downloadFinalReport("jsonc", filledAllReportData())
+                    )
+                  }
+                  disabled={busyKey !== null || !requiredAllFilled}
+                  title="下载 JSONC 版完整报告"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white px-4 text-xs font-semibold text-stone-700 transition-colors hover:border-stone-400 disabled:opacity-40"
+                >
+                  {busyKey === "quick-report-jsonc" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileCode2 className="h-3.5 w-3.5" />}
+                  完整 · JSONC
                 </button>
               </div>
             </div>
@@ -1030,7 +1186,7 @@ export default function SoundLightWorkspace() {
                         </p>
                       )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={() =>
                           runDownload("report-docx", () => downloadFinalReport("docx", reportData))
@@ -1050,6 +1206,28 @@ export default function SoundLightWorkspace() {
                       >
                         {busyKey === "report-pdf" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                         紧凑 PDF
+                      </button>
+                      <button
+                        onClick={() =>
+                          runDownload("report-md", () => downloadFinalReport("md", reportData))
+                        }
+                        disabled={busyKey !== null || !basicReady}
+                        title="下载 Markdown 版完整报告"
+                        className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white text-xs font-semibold text-stone-700 transition-colors hover:border-stone-400 disabled:opacity-50"
+                      >
+                        {busyKey === "report-md" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileType className="h-3.5 w-3.5" />}
+                        Markdown
+                      </button>
+                      <button
+                        onClick={() =>
+                          runDownload("report-jsonc", () => downloadFinalReport("jsonc", reportData))
+                        }
+                        disabled={busyKey !== null || !basicReady}
+                        title="下载 JSONC 版完整报告，结构见 docs/schemas/report.schema.json"
+                        className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white text-xs font-semibold text-stone-700 transition-colors hover:border-stone-400 disabled:opacity-50"
+                      >
+                        {busyKey === "report-jsonc" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileCode2 className="h-3.5 w-3.5" />}
+                        JSONC
                       </button>
                     </div>
                   </div>

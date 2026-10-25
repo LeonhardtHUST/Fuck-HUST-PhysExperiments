@@ -8,12 +8,13 @@ import {
   BarChart3,
   CheckCircle2,
   Download,
+  FileCode2,
   FileDown,
   FileText,
+  FileType,
   FlaskConical,
   Loader2,
   Play,
-  RotateCcw,
   Table2,
 } from "lucide-react";
 import {
@@ -26,6 +27,7 @@ import {
   type GenericExperimentConfig,
   type GenericExperimentData,
   type GenericProcessResponse,
+  type ReportFormat,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { getInputRange, isOutsideRange, rangeLabel } from "@/lib/input-ranges";
@@ -33,9 +35,18 @@ import OcrTableImporter from "./OcrTableImporter";
 import DataContributionPanel from "./DataContributionPanel";
 import ArtifactActions from "./ArtifactActions";
 import ArtifactRemarks from "./ArtifactRemarks";
+import { DraftClearMenu, DraftRestoreBanner } from "./WorkspaceDraftControls";
 import type { ArtifactInput } from "@/lib/experiment-artifact";
-import { mergeArtifactNotes, type ArtifactNotes, type DecodeOk } from "@/lib/artifact-scope";
+import {
+  hasArtifactNotes,
+  mergeArtifactNotes,
+  type ArtifactNotes,
+  type DecodeOk,
+} from "@/lib/artifact-scope";
+import { tryGetExperimentSpec } from "@/lib/experiment-specs";
 import { useDataCollection } from "@/hooks/useDataCollection";
+import { useWorkspaceDraft } from "@/hooks/useWorkspaceDraft";
+import type { DraftPayload } from "@/lib/workspace-draft";
 import {
   appendDraftRow,
   completionState,
@@ -74,6 +85,24 @@ function makeDraft(config: GenericExperimentConfig): Draft {
         ),
       },
     ])
+  );
+}
+
+const EMPTY_NOTES: ArtifactNotes = { remarks: null, tableRemarks: {}, computed: {} };
+
+/** 本机草稿 → 表格状态。草稿已按 spec 归一化，缺表时回落到默认行。 */
+function draftFromPayload(config: GenericExperimentConfig, payload: DraftPayload): Draft {
+  return Object.fromEntries(
+    config.methods.map((method) => {
+      const table = payload.tables[method.id];
+      return [
+        method.id,
+        {
+          rows: (table?.rows ?? []).map((row) => ({ ...row })),
+          params: { ...(table?.params ?? {}) },
+        },
+      ];
+    })
   );
 }
 
@@ -199,6 +228,53 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
     });
   };
 
+  const resetToDefault = () => {
+    if (!config) return;
+    setDraft(makeDraft(config));
+    setNotes(null);
+    setResult(null);
+    setError(null);
+  };
+
+  const applyDraftPayload = (payload: DraftPayload) => {
+    if (!config) return;
+    setDraft(draftFromPayload(config, payload));
+    setNotes(hasArtifactNotes(payload.notes) ? payload.notes : null);
+    setResult(null);
+    setError(null);
+  };
+
+  const snapshotDraft = (): DraftPayload => ({
+    setupParams: {},
+    tables: Object.fromEntries(
+      (config?.methods ?? []).map((method) => [
+        method.id,
+        { rows: draft[method.id]?.rows ?? [], params: draft[method.id]?.params ?? {} },
+      ])
+    ),
+    notes: notes ?? EMPTY_NOTES,
+  });
+
+  const clearTable = (tableId: string) => {
+    if (!config) return;
+    const defaults = makeDraft(config)[tableId];
+    if (!defaults) return;
+    setDraft((previous) => ({
+      ...previous,
+      [tableId]: { rows: defaults.rows.map((row) => ({ ...row })), params: { ...defaults.params } },
+    }));
+    clearTableNotes(tableId);
+    setResult(null);
+  };
+
+  const spec = useMemo(() => tryGetExperimentSpec(id), [id]);
+  const draftStore = useWorkspaceDraft({
+    experimentId: id,
+    spec: config ? spec : undefined,
+    snapshot: snapshotDraft,
+    restore: applyDraftPayload,
+  });
+
   const current = useMemo(() => config?.methods.find((method) => method.id === active), [config, active]);
   const completionMethods = useMemo<CompletionMethod[]>(
     () => (config?.methods ?? []).map((method) => ({
@@ -314,7 +390,7 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
   });
 
   const reportPayload = (): GenericExperimentData => payload(completion.completedMethodIds);
-  const downloadFinalReport = async (format: "docx" | "pdf") => {
+  const downloadFinalReport = async (format: ReportFormat) => {
     const data = reportPayload();
     await downloadGenericReport(id, format, data);
     await collection.commit(data);
@@ -331,7 +407,7 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
           <h1 className="text-2xl font-extrabold tracking-tight text-stone-900 sm:text-3xl">{config.name}</h1>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-stone-500">{config.description}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <button onClick={() => act("preview", () => previewRecordSheet(id))} disabled={!!busy} className="inline-flex h-10 items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 disabled:opacity-50"><FileText className="h-4 w-4" />预览记录表</button>
           <button onClick={() => act("record", () => downloadRecordSheet("docx", id))} disabled={!!busy} className="inline-flex h-10 items-center gap-2 rounded-xl bg-stone-900 px-4 text-sm font-semibold text-white disabled:opacity-50"><FileDown className="h-4 w-4" />记录表 Word</button>
           <ArtifactActions
@@ -344,8 +420,21 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
             computed={notes?.computed}
             onClearRemarks={() => setNotes(null)}
           />
+          <DraftClearMenu
+            tables={config.methods.map((method) => ({ id: method.id, title: method.name }))}
+            controller={draftStore}
+            onClearTable={clearTable}
+            onReset={resetToDefault}
+          />
         </div>
       </div>
+
+      <DraftRestoreBanner
+        restoredAt={draftStore.restoredAt}
+        onDismiss={draftStore.dismissRestored}
+        controller={draftStore}
+        onReset={resetToDefault}
+      />
 
       <DataContributionPanel collection={collection} />
 
@@ -511,33 +600,49 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
             <p className="mt-1 text-xs text-stone-500">
               {completion.requiredAllComplete
                 ? "必做数据已填完整，可直接生成完整报告；选做实验填完整后自动并入。"
-                : `请先填完：${completion.missingRequiredNames.join("、")}`}
+                : `缺项：${completion.missingRequiredNames.join("、")}。仍可直接生成报告，缺项会在正文中标注。`}
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={() => { setDraft(makeDraft(config)); setResult(null); setError(null); setNotes(null); }} className="inline-flex h-10 items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-600"><RotateCcw className="h-4 w-4" />清空</button>
-          <button
-            onClick={process}
-            disabled={!!busy}
-            title="预览当前已填写子实验的计算结果"
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-indigo-200 bg-white px-4 text-sm font-semibold text-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {busy === "process" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-            预览结果
-          </button>
-          <button
-            onClick={() => act("docx", () => downloadFinalReport("docx"))}
-            disabled={!!busy || !basicReady}
-            title={basicReady ? "直接生成完整报告 Word" : "请先填写完全部必做实验"}
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-stone-900 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-          ><FileText className="h-4 w-4" />报告 Word</button>
-          <button
-            onClick={() => act("pdf", () => downloadFinalReport("pdf"))}
-            disabled={!!busy || !basicReady}
-            title={basicReady ? "直接生成完整报告 PDF" : "请先填写完全部必做实验"}
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-          ><Download className="h-4 w-4" />报告 PDF</button>
+        <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            <button
+              onClick={process}
+              disabled={!!busy}
+              title="预览当前已填写子实验的计算结果"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-indigo-200 bg-white px-4 text-sm font-semibold text-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {busy === "process" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+              预览结果
+            </button>
+            <button
+              onClick={() => act("docx", () => downloadFinalReport("docx"))}
+              disabled={!!busy}
+              title={basicReady ? "直接生成完整报告 Word" : "必做缺项会在报告中标注为缺项"}
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-stone-900 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+            ><FileText className="h-4 w-4" />报告 Word</button>
+            <button
+              onClick={() => act("pdf", () => downloadFinalReport("pdf"))}
+              disabled={!!busy}
+              title={basicReady ? "直接生成完整报告 PDF" : "必做缺项会在报告中标注为缺项"}
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+            ><Download className="h-4 w-4" />报告 PDF</button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <span className="text-[11px] text-stone-400">更多格式</span>
+            <button
+              onClick={() => act("md", () => downloadFinalReport("md"))}
+              disabled={!!busy}
+              title="下载 Markdown 版完整报告（图片以 data URI 内嵌）"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 text-xs font-semibold text-stone-600 disabled:cursor-not-allowed disabled:opacity-40"
+            ><FileType className="h-3.5 w-3.5" />Markdown</button>
+            <button
+              onClick={() => act("jsonc", () => downloadFinalReport("jsonc"))}
+              disabled={!!busy}
+              title="下载 JSONC 版完整报告，结构见 docs/schemas/report.schema.json"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 text-xs font-semibold text-stone-600 disabled:cursor-not-allowed disabled:opacity-40"
+            ><FileCode2 className="h-3.5 w-3.5" />JSONC</button>
+          </div>
         </div>
       </div>
 
@@ -557,27 +662,39 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
               {result.status === "success" ? <CheckCircle2 className="h-6 w-6 text-emerald-600" /> : <AlertCircle className="h-6 w-6 text-amber-600" />}
               <div>
                 <p className="font-bold text-stone-900">{result.status === "success" ? "计算完成" : "部分计算完成"}</p>
-                <p className="text-xs text-stone-500">{Object.keys(result.results).length} 个子实验已生成结果{result.status !== "success" ? "；请补齐提示的数据后再生成完整报告" : ""}</p>
+                <p className="text-xs text-stone-500">{Object.keys(result.results).length} 个子实验已生成结果{result.status !== "success" ? "；缺项与未纳入的数据会在报告中标注" : ""}</p>
               </div>
             </div>
             {result.status === "success" && <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => act("docx", () => downloadFinalReport("docx"))}
-                disabled={!!busy || !basicReady}
-                title={basicReady ? "下载完整报告 Word" : "填写完全部必做实验后才能生成报告"}
+                disabled={!!busy}
+                title={basicReady ? "下载完整报告 Word" : "必做缺项会在报告中标注为缺项"}
                 className="inline-flex h-10 items-center gap-2 rounded-xl bg-stone-900 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
               ><FileText className="h-4 w-4" />完整报告 Word</button>
               <button
                 onClick={() => act("pdf", () => downloadFinalReport("pdf"))}
-                disabled={!!busy || !basicReady}
-                title={basicReady ? "下载完整报告 PDF" : "填写完全部必做实验后才能生成报告"}
+                disabled={!!busy}
+                title={basicReady ? "下载完整报告 PDF" : "必做缺项会在报告中标注为缺项"}
                 className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
               ><Download className="h-4 w-4" />完整报告 PDF</button>
+              <button
+                onClick={() => act("md", () => downloadFinalReport("md"))}
+                disabled={!!busy}
+                title="下载 Markdown 版完整报告"
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 disabled:cursor-not-allowed disabled:opacity-40"
+              ><FileType className="h-4 w-4" />Markdown</button>
+              <button
+                onClick={() => act("jsonc", () => downloadFinalReport("jsonc"))}
+                disabled={!!busy}
+                title="下载 JSONC 版完整报告"
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 disabled:cursor-not-allowed disabled:opacity-40"
+              ><FileCode2 className="h-4 w-4" />JSONC</button>
             </div>}
           </div>
           {!basicReady && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              报告尚未解锁：请先填写完{completion.missingRequiredNames.join("、")}。
+              必做项缺项：{completion.missingRequiredNames.join("、")}。仍可生成报告，缺项会在正文中标注。
             </div>
           )}
           {result.errors.length > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">部分数据未纳入：{result.errors.join("；")}</div>}

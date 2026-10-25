@@ -27,6 +27,16 @@ export interface ArtifactNotes {
   computed: Record<string, ComputedEntry>;
 }
 
+/** True when the notes carry anything worth keeping (import / draft restore). */
+export function hasArtifactNotes(notes: ArtifactNotes | null | undefined): boolean {
+  if (!notes) return false;
+  return (
+    Boolean(notes.remarks) ||
+    Object.keys(notes.tableRemarks).length > 0 ||
+    Object.keys(notes.computed).length > 0
+  );
+}
+
 export function notesFromArtifact(result: DecodeOk): ArtifactNotes {
   const tableRemarks: Record<string, TableRemarks> = {};
   for (const table of result.tables) {
