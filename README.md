@@ -137,7 +137,7 @@ PhysLab 负责采集与切分，[PhysLab_OCR](https://github.com/Bogger111/PhysL
 - 支持 12 个大学物理实验的录入、计算、绘图与报告
 - 支持实验记录表 OCR 辅助录入（候选值须人工确认）
 - 支持 AI 实验数据共建闭环：采集 → 确认 → 切分 → 训练集导出
-- 后端 387 项、前端 44 项自动测试全部通过
+- 后端 570 项、前端 93 项自动测试全部通过（后端另有 3 项跳过：缺 `.env.local` 与未暴露公式的实验）
 
 **未来**
 
@@ -151,7 +151,7 @@ PhysLab 负责采集与切分，[PhysLab_OCR](https://github.com/Bogger111/PhysL
 
 ### 一键脚本
 
-仓库根目录带一个 `package.json`，用 npm 脚本即可启动/构建，跨平台（Windows / macOS / Linux）：
+仓库根目录带一个 `package.json`，用 npm 脚本即可启动/构建/部署，跨平台（Windows / macOS / Linux）：
 
 | 命令 | 作用 |
 |---|---|
@@ -161,9 +161,11 @@ PhysLab 负责采集与切分，[PhysLab_OCR](https://github.com/Bogger111/PhysL
 | `npm run stop` | 停掉占用 8001 / 3000 的进程 |
 | `npm run mcp` | 前台启动本地 MCP Server（stdio，供 AI 客户端接入；不监听端口，见下） |
 | `npm run mcp:check` | 打印 MCP 工具清单自检，不进入协议、不常驻 |
-| `npm run stop` | 停掉占用 8001 / 3000 的进程 |
+| `npm run deploy` | 一键部署到 CloudBase：后端云托管 + 前端静态托管，详见「部署到 CloudBase」 |
+| `npm run deploy:backend` | 只重建云托管容器 |
+| `npm run deploy:frontend` | 只构建并上传前端静态产物 |
 
-`npm run dev` 只是转发到下面的脚本；需要细粒度参数时直接用脚本：
+`npm run dev / build / prod / stop` 只是转发到下面的脚本；需要细粒度参数时直接用脚本（`deploy` 系列不转发，直接在 Node 里执行部署流水，见「部署到 CloudBase」）：
 
 ```bash
 npm run prod -- --no-browser --detach     # 构建 + 后台生产模式，不弹浏览器
@@ -209,11 +211,11 @@ npm run prod -- --no-browser --detach     # 构建 + 后台生产模式，不弹
 | `dev.mjs` | 跨平台（npm 脚本入口） | `npm run dev / build / prod / stop` 的分发器，自动选用上面的 `.ps1` 或 `.sh` |
 | `serve-static.mjs` | 跨平台 | 生产模式的零依赖静态服务器，托管 `frontend/out`（目录补 `/` 301、`index.html` 落盘、MIME、缓存头、404） |
 | `mcp.mjs` | 跨平台（npm 脚本入口） | `npm run mcp` / `mcp:check` 的启动器：定位 `.venv` 解释器、检查 `mcp` 依赖，再转发到 `backend/mcp_server.py` |
-| `serve-static.mjs` | 跨平台 | 生产模式的零依赖静态服务器，托管 `frontend/out`（目录补 `/` 301、`index.html` 落盘、MIME、缓存头、404） |
+| `deploy.mjs` | 跨平台（npm 脚本入口） | `npm run deploy / deploy:backend / deploy:frontend` 的实现：预检环境、云托管部署、解析并缓存 API 地址、注入构建、上传静态托管 |
 | `export_ocr_dataset.py` | 跨平台（Python） | 导出经用户明确同意并确认的记录，供后续 OCR 研究使用；不做训练、裁剪或识别 |
 | `generate_simulated_reports.py` | 跨平台（Python） | 生成整套合成报告，用于打印排版 QA（数字仅为夹具，不代表真实结果正确性） |
 
-`npm run *` 只负责参数转发，脚本本身可直接调用，例如 `.\scripts\dev.ps1 -Prod -Detach -NoBrowser` 或 `./scripts/dev.sh --prod --detach --no-browser`。
+`npm run dev / build / prod / stop` 只负责参数转发，脚本本身可直接调用，例如 `.\scripts\dev.ps1 -Prod -Detach -NoBrowser` 或 `./scripts/dev.sh --prod --detach --no-browser`。`deploy` 系列不转发到 `.ps1` / `.sh`，由 `scripts/deploy.mjs` 直接执行部署流水（`node scripts/deploy.mjs --help` 看参数）。
 
 ### 用 Vite+（`vp` / `vpr`）运行
 
@@ -227,6 +229,7 @@ npm run prod -- --no-browser --detach     # 构建 + 后台生产模式，不弹
 | `npm run stop` | `vpr stop` |
 | `npm run mcp` | `vpr mcp` |
 | `npm run mcp:check` | `vpr mcp:check` |
+| `npm run deploy` | `vpr deploy` |
 
 - **附加参数不要写 `--`**：npm 会吞掉 `--`，`vpr` 则把它原样传给脚本（`vpr prod -- --no-browser` 会被 `dev.mjs` 当成未知参数拒绝）。Vite+ 用户请直接写 `vpr prod --no-browser`、`vpr dev --no-browser`。
 - 只写 `vpr run <task>` 会报 `Task "run" not found`：`vpr` 本身已经是 `vp run`，长写法用 `vp run <task>`。
@@ -279,6 +282,35 @@ npm run mcp            # 前台启动 stdio 服务器，Ctrl+C 结束；AI 客�
 配置写法、工具清单、`data` 三种结构与排障见 [docs/mcp.md](docs/mcp.md)。
 
 更多细节见 [docs/physkiller-2.0.md](docs/physkiller-2.0.md)（架构与流水线）、[docs/screenshots.md](docs/screenshots.md)（截图清单）、[CHANGELOG.md](CHANGELOG.md)（发布说明）。
+
+## 部署到 CloudBase
+
+仓库根目录的 `cloudbaserc.json` 记录目标环境。`npm run deploy` 依次完成：部署后端云托管容器 → 取回公网地址 → 带该地址构建前端 → 上传 `frontend/out` 到静态托管。
+
+前置（只需一次）：
+
+```bash
+npm i -g @cloudbase/cli
+tcb login          # 国际站环境先执行 tcb config set isIntl true
+```
+
+| 命令 | 作用 |
+|---|---|
+| `npm run deploy` | 完整流水：后端容器 + 前端构建上传 |
+| `npm run deploy:backend` | 只重建云托管容器 |
+| `npm run deploy:frontend` | 只构建并上传前端，复用上次解析到的 API 地址 |
+
+常用参数（`npm run deploy -- --help` 查看全部）：`--env <envId>`（也可用 `TCB_ENV_ID` 覆盖 `cloudbaserc.json`）、`--api-url`、`--site-origin`、`--skip-backend`、`--skip-frontend`、`--skip-build`、`--dry-run`。
+
+- 前端把 API 地址编译进产物，所以顺序固定为「先容器、后前端」；解析到的地址缓存在 `.dev-logs/cloudbase.json`，后端已可用时加 `--skip-backend` 只发前端。
+- 静态托管域名在首次部署后才存在：把它写进 `deploy/cloudbase.env.json` 的 `CORS_ORIGINS`，再跑 `npm run deploy:backend` 让跨域生效。
+- 云托管按 `deploy/cloudbase.env.json` **整体覆盖**环境变量（不是合并），改配置请改这个文件。
+- 首次容器构建约 3–8 分钟（`pip install` 与中文字体），之后走镜像层缓存。
+- `--dry-run` 只打印将执行的 `tcb` 命令，不产生任何云端变更。
+- 容器里只有 `uvicorn` 的 HTTP 后端：**MCP 不上云**（`backend/Dockerfile` 不打包 `mcp_server.py`，`backend/.dockerignore` 把它排除在构建上下文外），MCP 只在本机给 AI 客户端用。
+- 日志写入 `.dev-logs/cloudbase-*.log`，完整输出不在控制台刷屏。
+
+它和 GitHub Pages、Oracle、Cloudflare 三条通道并列，细节见 [docs/deployment.md](docs/deployment.md)。
 
 ## 反馈
 

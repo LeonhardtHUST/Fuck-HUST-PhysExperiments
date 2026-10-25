@@ -46,6 +46,32 @@ Cloudflare Containers 需要 Workers Paid 计划。部署前，如果使用自�
 
 PhysKiller 2.0 的匿名分析和 OCR 反馈默认写入容器临时目录中的 SQLite。若需要在自托管后端保留统计，应通过环境变量 `PHYSICSLAB_TELEMETRY_DB` 指向持久卷；不要把该数据库提交到 Git。默认 OCR provider 是 RapidOCR，只有在镜像额外安装 PaddleOCR 后才设置 `PHYSICSLAB_OCR_PROVIDER=paddleocr`。
 
+## CloudBase（静态托管 + 云托管）
+
+仓库根目录的 `cloudbaserc.json` 指定目标环境，`npm run deploy` 把两件事串成一条流水：
+
+- `tcb cloudrun deploy --source backend`：按 `backend/Dockerfile` 在云端构建 FastAPI 容器（端口 8001），服务不存在时自动创建；
+- `tcb hosting deploy frontend/out /`：把 Next.js 静态导出上传到静态托管。
+
+因为前端在构建期把 `NEXT_PUBLIC_API_URL` 编译进产物，脚本顺序固定为「容器 → 解析公网地址 → 构建前端 → 上传」，并把解析到的地址缓存到 `.dev-logs/cloudbase.json`，让 `deploy:frontend` 可以单独重跑。
+
+准备工作：
+
+```bash
+npm i -g @cloudbase/cli
+tcb login
+tcb config set isIntl true   # 环境属于腾讯云国际站时需要
+tcb env list                 # 确认能看到 cloudbaserc.json 里的 envId
+```
+
+命令、参数与日志位置见 README「部署到 CloudBase」。三处容易踩：
+
+1. **CORS 要回填**：`backend/app/main.py` 把 `CORS_ORIGINS` 追加到默认来源之后，默认只有 localhost 与 GitHub Pages。首次部署成功后，把静态托管域名写进 `deploy/cloudbase.env.json`（多个用逗号分隔），再执行 `npm run deploy:backend`。
+2. **环境变量是全量覆盖**：`tcb cloudrun deploy --env-params` 会用传入 JSON 整体替换线上变量，所以脚本以 `deploy/cloudbase.env.json` 为唯一事实源；只在控制台改会被下一次部署覆盖。
+3. **套餐限制**：云托管需要对应套餐支持。创建服务被拒时可用 `npm run deploy:frontend -- --api-url <已有后端地址>` 只发布站点，后端继续留在 Oracle 或 Cloudflare。
+
+`--dry-run` 只打印将要执行的 `tcb` 命令，适合先核对 envId、服务名、端口与 CORS。完整日志写入 `.dev-logs/cloudbase-*.log`。
+
 ## MCP 不在部署范围内
 
 `backend/mcp_server.py` 与 `backend/physlab_mcp/` 是**本地**能力，只供开发者机器上的 AI 客户端（codex / opencode / CodeBuddy 等）通过 stdio 接入，不参与上云：
