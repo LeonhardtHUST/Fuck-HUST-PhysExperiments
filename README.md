@@ -197,6 +197,19 @@ npm run prod -- --no-browser --detach     # 构建 + 后台生产模式，不弹
 - Windows 上跑 bash 版本请用 Git Bash（`.venv/Scripts/python.exe` 与 `.venv/bin/python` 脚本会自行识别）。
 - 生产模式的静态服务器是仓库自带的零依赖脚本 `scripts/serve-static.mjs`（等价于 CI 上的静态托管：目录补 `/` 重定向、`index.html` 落盘、404 页面）。
 
+#### `scripts/` 目录
+
+| 文件 | 运行环境 | 作用 |
+|---|---|---|
+| `dev.ps1` | Windows（PowerShell 5.1 / PowerShell 7） | 主启动脚本：依赖安装、端口清理、`-Build` / `-Prod` / `-Detach` / `-Stop` |
+| `dev.sh` | bash（Git Bash / Linux / macOS） | 与 `dev.ps1` 等价，参数为 `--build` / `--prod` / `--detach` / `--stop` |
+| `dev.mjs` | 跨平台（npm 脚本入口） | `npm run dev / build / prod / stop` 的分发器，自动选用上面的 `.ps1` 或 `.sh` |
+| `serve-static.mjs` | 跨平台 | 生产模式的零依赖静态服务器，托管 `frontend/out`（目录补 `/` 301、`index.html` 落盘、MIME、缓存头、404） |
+| `export_ocr_dataset.py` | 跨平台（Python） | 导出经用户明确同意并确认的记录，供后续 OCR 研究使用；不做训练、裁剪或识别 |
+| `generate_simulated_reports.py` | 跨平台（Python） | 生成整套合成报告，用于打印排版 QA（数字仅为夹具，不代表真实结果正确性） |
+
+`npm run *` 只负责参数转发，脚本本身可直接调用，例如 `.\scripts\dev.ps1 -Prod -Detach -NoBrowser` 或 `./scripts/dev.sh --prod --detach --no-browser`。
+
 ### 手动启动
 
 ```bash
