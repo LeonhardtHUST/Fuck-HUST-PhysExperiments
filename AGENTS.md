@@ -131,6 +131,16 @@ python -m ocr_dataset.templates --check                        # 必须通过
 - **清孤儿**：`Get-CimInstance Win32_Process -Filter "Name='python.exe'" | ? { $_.CommandLine -match 'mcp_server|probe' }` 后逐个 `taskkill /PID <pid> /T /F`（PowerShell 里 `$pid` 是只读内置变量，循环变量换个名字）。
 - **纪律**：stdio 下日志一律走 stderr，入口脚本已强制 `MPLBACKEND=Agg`（否则 matplotlib 可能弹窗/写 stdout 破坏协议）。
 
+### 11. CloudBase 部署：体验版没有云托管，CORS 要回填
+
+流水与参数 refer to `README.md`「部署到 CloudBase」（`npm run deploy -- --help` 看全部）。实测环境 `leon-cloudbase-d7g86m8ebf2db3e6f`（体验版、国际站）：
+
+- **后端阶段必然失败**：`tcb cloudrun deploy` 报 `[CreateCloudRunServer] 云托管资源未开通`、exit 4。体验版不含云托管，开通前只能用 `npm run deploy:frontend -- --api-url <已有后端>` 发前端。
+- **静态托管可用**：成功标志是 `Successfully uploaded N file(s)`；域名用 `tcb hosting detail -e <envId>` 查（`tcb app list` 在本环境无输出，不要依赖它）。
+- **CORS 只对 CloudBase 云托管生效**：`deploy/cloudbase.env.json` 的 `CORS_ORIGINS` 是容器环境变量；后端跑在别处（如 Google Cloud Run）要改那边，否则页面能打开、接口全被浏览器拦。验证方式：带 `Origin: <站点域名>` 请求 `/health`，看响应头是否有 `Access-Control-Allow-Origin`。
+- **首次前端构建约 8 分钟**（本机 Turbopack 全量编译），按第 3 条后台重定向 + 轮询，不要前台干等；`frontend/out` 与 `.dev-logs/` 已被忽略，别提交。
+- **环境变量是全量覆盖**：`--env-params` 整体替换线上变量，改配置只改 `deploy/cloudbase.env.json`。
+
 ## 提交习惯
 
 - 提交信息用中文 Conventional Commits，scope 取模块名：`feat(workspace): ...`、`fix(gmr): ...`、`docs(readme): ...`。
