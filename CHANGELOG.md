@@ -22,6 +22,10 @@ PhysLab 的版本记录。格式参考 [Keep a Changelog](https://keepachangelog
 - **MCP 明确为本地能力**：`backend/Dockerfile` 不再打包 `mcp_server.py` / `physlab_mcp/`，`backend/.dockerignore` 同时把它们排除出构建上下文，云端只部署 `uvicorn` 的 HTTP 后端（见 `docs/deployment.md`）
 - **报告允许必做缺项**：生成报告不再被「请先填写完全部必做实验」拦截；未算出结果的必做子实验在报告第三部分标注为「必做项目缺项」并留空，其余已提交数据照常计算，HTTP 路由与 MCP 工具行为一致
 
+### Fixed
+
+- **构建被中断后不再被残留锁卡死**：构建中断（崩溃 / IDE 批量删除守卫拦截 / `Ctrl+C`）会留下 `frontend/.next/lock`，再次构建直接报 `Another next build process is already running` 且不会自愈；`scripts/dev.ps1` 与 `scripts/dev.sh` 现在在 `npm run build` 前检查该锁——有存活的构建进程则明确提示并中止（避免双构建互相破坏产物），无存活进程则判定为残留并自动清理
+
 ## 2.0 — 2026-09-18
 
 PhysLab 2.0：从「实验数据处理工具」升级为具备真实数据共建能力的实验 AI 平台。
