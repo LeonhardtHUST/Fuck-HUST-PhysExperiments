@@ -26,7 +26,8 @@ import {
 import { cn } from "@/lib/utils";
 import { getInputRange, isOutsideRange, rangeLabel, type InputRangeHint } from "@/lib/input-ranges";
 import DataInputTable from "@/components/workspace/DataInputTable";
-import ArtifactActions from "@/components/workspace/ArtifactActions";
+import ArtifactActions, { type OcrTarget } from "@/components/workspace/ArtifactActions";
+import { applyOcrValues, editableCellCount } from "@/lib/ocr-apply";
 import ArtifactRemarks from "@/components/workspace/ArtifactRemarks";
 import { trimTrailingEmptyRows } from "@/components/workspace/table-rows";
 import DataContributionPanel from "@/components/workspace/DataContributionPanel";
@@ -338,19 +339,41 @@ export default function SoundLightWorkspace() {
 
   const spec = METHODS.find((m) => m.id === method)!;
 
-  const getRows = (mId: string, ti: number): string[][] => {
+  /** 行式表格的当前内容：编辑过的用编辑态，没编辑过的回落到讲义默认行 */
+  const resolveRows = (
+    state: Record<string, string[][]>,
+    mId: string,
+    ti: number
+  ): string[][] => {
     const mspec = METHODS.find((m) => m.id === mId)!;
     const table = mspec.tables[ti];
-    const key = `${mId}#${ti}`;
-    if (!cell[key]) {
-      const editable = table.cols.filter((c) => !c.readOnly).length;
-      return makeRows(table.rows, editable);
-    }
-    return cell[key];
+    return state[`${mId}#${ti}`] ?? makeRows(table.rows, table.cols.filter((c) => !c.readOnly).length);
   };
+
+  const getRows = (mId: string, ti: number): string[][] => resolveRows(cell, mId, ti);
 
   const setRows = (mId: string, ti: number, data: string[][]) =>
     setCell((prev) => ({ ...prev, [`${mId}#${ti}`]: data }));
+
+  /** 拍照录入的写回闭包：只读列（序号/由行序推导的角度）不参与识别 */
+  const ocrTargetFor = (mId: string, ti: number): OcrTarget => {
+    const mspec = METHODS.find((m) => m.id === mId)!;
+    const table = mspec.tables[ti];
+    const readOnlyColumns = table.cols.map((column) => column.readOnly === true);
+    return {
+      tableId: `${mId}-${ti}`,
+      title: table.title ? `${mspec.name} · ${table.title}` : mspec.name,
+      expectedCellCount: editableCellCount(getRows(mId, ti), readOnlyColumns),
+      apply: (values, overwriteExisting) =>
+        setCell((prev) => ({
+          ...prev,
+          [`${mId}#${ti}`]: applyOcrValues(resolveRows(prev, mId, ti), values, {
+            readOnlyColumns,
+            overwriteExisting,
+          }),
+        })),
+    };
+  };
 
   const getParams = (mId: string): Record<string, string> => {
     const mspec = METHODS.find((m) => m.id === mId)!;
@@ -755,6 +778,7 @@ export default function SoundLightWorkspace() {
                 tableRemarks={notes?.tableRemarks}
                 computed={notes?.computed}
                 onClearRemarks={() => setNotes(null)}
+                ocrTargets={METHODS.flatMap((mspec) => mspec.tables.map((_, ti) => ocrTargetFor(mspec.id, ti)))}
               />
               <DraftClearMenu
                 tables={DRAFT_TABLE_OPTIONS}
@@ -1012,7 +1036,6 @@ export default function SoundLightWorkspace() {
                       }))}
                       data={getRows(method, ti)}
                       onChange={(d) => setRows(method, ti, d)}
-                      ocr={{ experimentId: EXP_ID, tableId: `${method}-${ti}` }}
                       resizable
                       minRows={table.minRows ?? 1}
                       actions={
@@ -1027,6 +1050,7 @@ export default function SoundLightWorkspace() {
                           onImport={applyArtifact}
                           tableRemarks={notes?.tableRemarks}
                           onClearRemarks={() => clearTableNotes(`${method}-${ti}`)}
+                          ocrTargets={[ocrTargetFor(method, ti)]}
                           variant="table"
                         />
                       }

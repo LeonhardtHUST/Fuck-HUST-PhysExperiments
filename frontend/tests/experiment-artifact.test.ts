@@ -298,3 +298,45 @@ test("prompt without context still contains the schema and rules", () => {
   assert.equal(prompt.includes("malus"), true);
   assert.equal(prompt.includes("本实验的数据表"), true);
 });
+
+test("prompt defaults to the photo variant and references the record sheet", () => {
+  const prompt = buildPrompt(polarization);
+  assert.equal(prompt.includes("记录纸的照片或扫描件"), true);
+  assert.equal(prompt.includes("看不清的格子写 null"), true);
+  assert.equal(prompt.includes("数据来源：记录纸照片"), true);
+});
+
+test("electronic prompt drops the photo-only constraints", () => {
+  const prompt = buildPrompt(michelson, undefined, { source: "electronic" });
+  // 照片版的取数约束不应出现
+  assert.equal(prompt.includes("记录纸的照片或扫描件"), false);
+  assert.equal(prompt.includes("看不清的格子"), false);
+  assert.equal(prompt.includes("只依据图片内容"), false);
+  assert.equal(prompt.includes("读数分辨率按记录纸保留"), false);
+  // 换成电子数据特有的约束
+  assert.equal(prompt.includes("数据来源：电子数据"), true);
+  assert.equal(prompt.includes("仪器导出文件"), true);
+  assert.equal(prompt.includes("占位符与无效值"), true);
+  assert.equal(prompt.includes("按实际数据条数输出"), true);
+  // 骨架（表 id / schema / 禁止字段 / 输出格式）仍然完整
+  for (const table of michelson.tables) assert.equal(prompt.includes(table.tableId), true);
+  assert.equal(prompt.includes("```jsonc"), true);
+  assert.equal(prompt.includes("## 十、JSONC 模板（填写目标）"), true);
+});
+
+test("the two prompt variants differ but stay deterministic", () => {
+  const context: PromptContext = {
+    experimentId: polarization.id,
+    background: "偏振光通过检偏器，光强随角度按马吕斯定律变化。",
+    methods: [{ id: "malus", name: "马吕斯定律", formulas: ["I = I0 cos²θ"] }],
+  };
+  const photo = buildPrompt(polarization, context, { source: "photo" });
+  const electronic = buildPrompt(polarization, context, { source: "electronic" });
+  assert.notEqual(photo, electronic);
+  assert.equal(electronic, buildPrompt(polarization, context, { source: "electronic" }));
+  // 共用章节两边都在，且公式不会因为换版本而丢失
+  for (const shared of ["## 一、实验来龙去脉", "## 四、本实验的数据表", "## 七、remarks", "I = I0 cos²θ"]) {
+    assert.equal(photo.includes(shared), true);
+    assert.equal(electronic.includes(shared), true);
+  }
+});

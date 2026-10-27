@@ -20,6 +20,10 @@ interface Props {
   tableId: string;
   expectedCellCount: number;
   onApply: (values: string[], overwriteExisting: boolean) => void;
+  /** 嵌在导入弹窗里：默认展开、去掉外层折叠外壳（弹窗本身已是入口） */
+  embedded?: boolean;
+  /** 回填成功后的回调，弹窗用它收起自己 */
+  onApplied?: () => void;
 }
 
 interface ReviewCell {
@@ -43,8 +47,10 @@ export default function OcrTableImporter({
   tableId,
   expectedCellCount,
   onApply,
+  embedded = false,
+  onApplied,
 }: Props) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(embedded);
   const [file, setFile] = useState<File | null>(null);
   const [cells, setCells] = useState<ReviewCell[]>([]);
   const [detectedCount, setDetectedCount] = useState(0);
@@ -159,6 +165,7 @@ export default function OcrTableImporter({
     onApply(cells.map((cell) => cell.value.trim()), overwrite);
     setApplied(true);
     void trackEvent("ocr_confirm", experimentId, { table_id: tableId, confirmed_cells: recognized });
+    onApplied?.();
     if (consent) {
       cells.forEach((cell, index) => {
         const confirmed = cell.value.trim();
@@ -194,21 +201,23 @@ export default function OcrTableImporter({
   };
 
   return (
-    <div className="mb-3 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/45">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-      >
-        <span className="flex items-center gap-2 text-sm font-bold text-indigo-900">
-          <Camera className="h-4 w-4 text-indigo-600" />
-          图片识别录入
-        </span>
-        <span className="text-xs font-medium text-indigo-500">{open ? "收起" : "上传手写表格"}</span>
-      </button>
+    <div className={embedded ? "" : "mb-3 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/45"}>
+      {!embedded && (
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        >
+          <span className="flex items-center gap-2 text-sm font-bold text-indigo-900">
+            <Camera className="h-4 w-4 text-indigo-600" />
+            图片识别录入
+          </span>
+          <span className="text-xs font-medium text-indigo-500">{open ? "收起" : "上传手写表格"}</span>
+        </button>
+      )}
 
-      {open && (
-        <div className="border-t border-indigo-100 px-4 py-4">
+      {(embedded || open) && (
+        <div className={embedded ? "" : "border-t border-indigo-100 px-4 py-4"}>
           <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
             <div>
               {preview ? (

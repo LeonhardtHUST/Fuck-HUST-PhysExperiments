@@ -6,6 +6,7 @@ PhysLab 的版本记录。格式参考 [Keep a Changelog](https://keepachangelog
 
 ### Added
 
+- **AI Prompt 双版本**：导入弹窗的「AI Prompt」页签可切换「记录纸照片 / 电子数据」。照片版沿用原来的取数约束（只依据图片、看不清留 null、按纸面分辨率保留）；电子版针对仪器导出文件、CSV / Excel 与直接贴出的数据表，改为强调列名映射、单位换算、占位符（`--` / `NaN`）转 null、行数按实际条数输出、精度不按记录表分辨率取整
 - **MCP Server（stdio）**：`backend/mcp_server.py` + `backend/physlab_mcp/`，把实验查询、数据校验、计算与拟合、报告/记录表生成、手写记录表识别暴露为 MCP 工具，供 codex / opencode / CodeBuddy / Claude Desktop 直接调用；与网页共用同一套计算核心
 - **产物落盘**：报告、记录表、拟合图写入 `PHYSICSLAB_MCP_OUTPUT_DIR`（默认系统临时目录 `physlab-mcp/`），返回绝对路径 + MIME + 字节数，不通过协议传输大段二进制
 - **数据特征参考工具**：按 `experiments/*/data_reference.json` 内的 `experiment_id` 建索引，新增实验无需改代码
@@ -17,6 +18,7 @@ PhysLab 的版本记录。格式参考 [Keep a Changelog](https://keepachangelog
 
 ### Changed
 
+- **实验数据入口合并为「导入 / 导出」**：工作台工具条不再并列「导出实验数据 / 导入实验数据 / 复制 AI Prompt / 查看 Schema」四个按钮；AI Prompt、Schema、粘贴或选择文件、拍照录入（OCR）、导入备注统一收进「导入」弹窗，导出只保留纯数据导出。拍照录入不再是表格上方的常驻面板，改由导入弹窗按目标表格选择，各工作台通过 `ocrTargets` 提供写回闭包
 - **MCP 明确为本地能力**：`backend/Dockerfile` 不再打包 `mcp_server.py` / `physlab_mcp/`，`backend/.dockerignore` 同时把它们排除出构建上下文，云端只部署 `uvicorn` 的 HTTP 后端（见 `docs/deployment.md`）
 - **报告允许必做缺项**：生成报告不再被「请先填写完全部必做实验」拦截；未算出结果的必做子实验在报告第三部分标注为「必做项目缺项」并留空，其余已提交数据照常计算，HTTP 路由与 MCP 工具行为一致
 

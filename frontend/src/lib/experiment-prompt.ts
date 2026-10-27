@@ -2,6 +2,14 @@
  * Builds the one-click AI prompt: experiment background + formulas + the
  * complete JSONC schema of every table + filling rules + remarks contract.
  *
+ * Two variants share the same skeleton and differ only in the data-source
+ * assumption:
+ * - `photo`（默认）：用户会喂给 AI 记录纸的照片/扫描件，读数不确定，
+ *   所以规则围绕「看不清就留空、按纸面分辨率保留、异常要标出来」展开；
+ * - `electronic`：数据来自仪器导出文件 / CSV / Excel，数值本身是确定的，
+ *   照片时代那些「防臆造」的约束不再适用，换成映射、单位换算、占位符、
+ *   行数与精度这类电子数据特有的坑。
+ *
  * Pure string assembly so the workspace can `useMemo` it and node tests can
  * assert its content without touching the DOM.
  */
@@ -9,6 +17,18 @@
 import { buildExperimentSchemaJsonc, computedKey } from "./experiment-schema.ts";
 import type { PromptContext } from "./prompt-context.ts";
 import type { ExperimentSpec } from "./table-specs.ts";
+
+/** 数据来源假设：记录纸照片 / 电子数据 */
+export type PromptSource = "photo" | "electronic";
+
+export interface PromptOptions {
+  source?: PromptSource;
+}
+
+export const PROMPT_SOURCE_LABELS: Record<PromptSource, string> = {
+  photo: "记录纸照片",
+  electronic: "电子数据",
+};
 
 function theorySection(spec: ExperimentSpec, context?: PromptContext): string {
   const lines: string[] = ["## 一、实验来龙去脉", ""];
@@ -87,48 +107,82 @@ function forbiddenResults(spec: ExperimentSpec): string {
   return lines.join("\n");
 }
 
-function rulesSection(spec: ExperimentSpec, context?: PromptContext): string {
-  const lines: string[] = ["## 五、填写规则", ""];
-  lines.push(
-    "1. 只填写记录纸上能直接读到的量（刻度、示数、时间、角度等）；读数分辨率按记录纸保留，不要四舍五入成「好看」的数。"
-  );
-  lines.push("2. 单位为表内标注单位；换算出错比不填更糟，拿不准就在 remarks 里说明。");
-  lines.push(
-    `3. rows 按记录纸顺序，每行一个对象；缺失值写 null，不要编造、不要外推、不要补零；每表至少 ${Math.min(
-      ...spec.tables.map((table) => table.minRows)
-    )} 行（各表要求见第四节）。`
-  );
-  const derived = spec.tables.flatMap((table) =>
+function derivedColumns(spec: ExperimentSpec): string[] {
+  return spec.tables.flatMap((table) =>
     table.columns.filter((column) => column.rowIndex).map((column) => `${table.tableId}.${column.key}`)
   );
-  if (derived.length > 0) {
-    lines.push(
-      `4. 以下列由行序自动推导，若记录纸上有明确读数就填实际值，读不清可以省略（系统会按起始值/步长补全）：${derived.join("、")}。`
+}
+
+function rulesSection(spec: ExperimentSpec, context: PromptContext | undefined, source: PromptSource): string {
+  const electronic = source === "electronic";
+  const minRows = Math.min(...spec.tables.map((table) => table.minRows));
+  const rules: string[] = [];
+
+  if (electronic) {
+    rules.push(
+      "只填写电子数据里实际存在的测量量；原始列名与表内列名不一致时按物理含义对应，并在 remarks 里记录对应关系（例如 `I(μW)` → `i_left`）。"
+    );
+    rules.push(
+      "单位为表内标注单位；电子数据的单位常写在列名或文件头里，换算错比不填更糟，做过换算就在 remarks 里写清算式（如 mA → A 乘 1e-3）。"
+    );
+    rules.push(
+      `rows 按原始数据的记录顺序，每行一个对象；缺失值写 null，不要编造、不要外推、不要补零；每表至少 ${minRows} 行（各表要求见第四节）。同一个文件里分段或多 sheet 存放的数据，按内容拆到对应 tableId。`
+    );
+    rules.push(
+      "占位符与无效值（空单元格、`--`、`N/A`、`NaN`、`#DIV/0!`、`∞`）一律写 null；带千分位逗号、全角符号或单位后缀的数值先规范化为纯数字。"
     );
   } else {
-    lines.push("4. 自动序号列不需要填写。");
-  }
-  lines.push(
-    "5. params 填表头/环境参数（温度、频率、背景光强等）；记录纸上没有的写 null，不要用理论默认值冒充实测。"
-  );
-  lines.push(
-    "6. 如果某张表数据不足以作图（行数不足、整列空缺、数值明显越界），仍要输出该表，但在表级 remarks 里写 status: \"incomplete\" 或 \"suspect\" 并说明原因。"
-  );
-  if (spec.setupParams.length > 0) {
-    lines.push(
-      `7. setupParams 为实验级参数：${spec.setupParams
-        .map((param) => param.key)
-        .join("、")}，有读数就填。`
+    rules.push(
+      "只填写记录纸上能直接读到的量（刻度、示数、时间、角度等）；读数分辨率按记录纸保留，不要四舍五入成「好看」的数。"
+    );
+    rules.push("单位为表内标注单位；换算出错比不填更糟，拿不准就在 remarks 里说明。");
+    rules.push(
+      `rows 按记录纸顺序，每行一个对象；缺失值写 null，不要编造、不要外推、不要补零；每表至少 ${minRows} 行（各表要求见第四节）。`
     );
   }
-  lines.push("");
+
+  const derived = derivedColumns(spec);
+  if (derived.length > 0) {
+    rules.push(
+      electronic
+        ? `以下列由行序自动推导，原始数据里有该列就填原始值，缺失时省略（系统会按起始值/步长补全）：${derived.join("、")}。`
+        : `以下列由行序自动推导，若记录纸上有明确读数就填实际值，读不清可以省略（系统会按起始值/步长补全）：${derived.join("、")}。`
+    );
+  } else {
+    rules.push("自动序号列不需要填写。");
+  }
+
+  rules.push(
+    electronic
+      ? "params 填电子数据或文件头里的环境/设备参数（温度、频率、采样率、背景光强等）；数据里没有的写 null，不要用理论默认值冒充实测。"
+      : "params 填表头/环境参数（温度、频率、背景光强等）；记录纸上没有的写 null，不要用理论默认值冒充实测。"
+  );
+
+  rules.push(
+    "如果某张表数据不足以作图（行数不足、整列空缺、数值明显越界），仍要输出该表，但在表级 remarks 里写 status: \"incomplete\" 或 \"suspect\" 并说明原因。"
+  );
+
+  if (spec.setupParams.length > 0) {
+    rules.push(`setupParams 为实验级参数：${spec.setupParams.map((param) => param.key).join("、")}，有读数就填。`);
+  }
+
+  if (electronic) {
+    rules.push(
+      "行数按实际数据条数输出，不要截断或补齐到记录表的默认行数；精度按原始数据保留，不要按记录表的分辨率取整。"
+    );
+  }
+
   const aiComputed = (context?.methods ?? []).flatMap((method) =>
     (method.aiComputed ?? []).map((entry) => computedKey(method.id, entry.key))
   );
+
+  const lines: string[] = ["## 五、填写规则", ""];
+  rules.forEach((rule, index) => lines.push(`${index + 1}. ${rule}`));
+  lines.push("");
   lines.push(
     aiComputed.length > 0
-      ? `8. computed 仅允许填这些后端不计算的派生量：${aiComputed.join("、")}，并保留 source: "ai"。`
-      : "8. computed 里的字段全部由系统计算，请保持原样，不要填写任何计算结果。"
+      ? `${rules.length + 1}. computed 仅允许填这些后端不计算的派生量：${aiComputed.join("、")}，并保留 source: "ai"。`
+      : `${rules.length + 1}. computed 里的字段全部由系统计算，请保持原样，不要填写任何计算结果。`
   );
   lines.push("");
   return lines.join("\n");
@@ -160,7 +214,30 @@ function remarksSection(): string {
   ].join("\n");
 }
 
-function outputSection(spec: ExperimentSpec): string {
+function outputSection(spec: ExperimentSpec, source: PromptSource): string {
+  const electronic = source === "electronic";
+  const partial = electronic
+    ? "5. 如果原始数据只覆盖部分表格，就只填这些表，其余表可以省略（前端会保持对应表格原样并在导入后提示）。"
+    : "5. 如果记录纸只能支撑部分表格，就只填这些表，其余表可以省略（前端会保持对应表格原样并在导入后提示）。";
+
+  const checklist = electronic
+    ? [
+        "- 每张表行数是否等于原始数据条数、且不少于最少行数？",
+        "- 占位符（`--`、`NaN`、空单元格）是否都写成了 null，而不是 0 或空字符串？",
+        "- 单位是否已换算成表头单位？换算关系是否写进了 remarks？",
+        "- 原始数据里多出来的列（时间戳、设备编号、重复列）是否被误塞进表内列？",
+        "- 是否误填了第六节列出的结果字段？",
+        "- 数据异常处是否都在 remarks 中给出位置与可能原因？",
+        "- 输出是否是单个 jsonc 代码块、且能被 JSONC 解析器解析？",
+      ]
+    : [
+        "- 每张表行数是否达到最少行数？缺失行是否如实留空而不是补零？",
+        "- 数值单位是否与表头一致？角度/位移的数量级是否合理？",
+        "- 是否误填了第六节列出的结果字段？",
+        "- 数据异常处是否都在 remarks 中给出位置与可能原因？",
+        "- 输出是否是单个 jsonc 代码块、且能被 JSONC 解析器解析？",
+      ];
+
   return [
     "## 八、输出格式",
     "",
@@ -168,23 +245,37 @@ function outputSection(spec: ExperimentSpec): string {
     "2. 严格使用第四节的 JSONC 模板结构：`schemaVersion`、`experiment`、`tables`、`remarks`，有 setupParams/computed 时一并保留。",
     "3. tableId 与列键必须逐字一致；不要新增表、不要新增列、不要改名。",
     "4. 允许保留 // 注释；尾随逗号也可以，前端会容错解析。",
-    `5. 如果记录纸只能支撑部分表格，就只填这些表，其余表可以省略（前端会保持对应表格原样并在导入后提示）。`,
+    partial,
     "",
     "## 九、自检清单",
     "",
-    "- 每张表行数是否达到最少行数？缺失行是否如实留空而不是补零？",
-    "- 数值单位是否与表头一致？角度/位移的数量级是否合理？",
-    "- 是否误填了第六节列出的结果字段？",
-    "- 数据异常处是否都在 remarks 中给出位置与可能原因？",
-    "- 输出是否是单个 jsonc 代码块、且能被 JSONC 解析器解析？",
+    ...checklist,
     "",
-    `（本模板对应实验：${spec.name} · ${spec.id} · schemaVersion 1）`,
+    `（本模板对应实验：${spec.name} · ${spec.id} · schemaVersion 1 · 数据来源：${PROMPT_SOURCE_LABELS[source]}）`,
     "",
   ].join("\n");
 }
 
-export function buildPrompt(spec: ExperimentSpec, context?: PromptContext): string {
-  const header = [
+function headerSection(spec: ExperimentSpec, source: PromptSource): string {
+  if (source === "electronic") {
+    return [
+      `# 大学物理实验数据录入任务：${spec.name}`,
+      "",
+      "你是一名物理实验数据录入与检查助手。我会提供本次实验的电子数据——仪器导出文件、CSV / Excel 表格，或直接贴出的数据表；数值本身是确定的，你的任务是把它们按下面的 JSONC 模板整理成一份可直接导入前端工作台的数据 artifact，并指出其中不自洽的地方。",
+      "",
+      "要求：",
+      "- 只依据我给的数据与其表头（列名、单位）映射，不臆造缺失值；数据里没有的格子写 null。",
+      "- 数值按原始数据原样保留（有效数字、科学计数法、小数位都不要改），不要为了「好看」四舍五入。",
+      "- 单位以表内标注为准；原始数据的单位常写在列名或文件头里，不一致时必须换算，并在 remarks 里写明换算关系。",
+      "- 数据异常、无法作图、疑似仪器漂移或操作失误，一律写进 remarks（第七节）。",
+      "- 不要计算系统会负责的结果（第六节）。",
+      "",
+      "（若我给的是表格文本或表格截图，按行列对应关系机械读取即可；被省略的行不要靠推测补全。）",
+      "",
+    ].join("\n");
+  }
+
+  return [
     `# 大学物理实验数据录入任务：${spec.name}`,
     "",
     "你是一名物理实验数据录入与检查助手。我会上传本次实验记录纸的照片或扫描件；请提取读数，按下面的 JSONC 模板输出一份可直接导入前端工作台的数据 artifact。",
@@ -196,6 +287,14 @@ export function buildPrompt(spec: ExperimentSpec, context?: PromptContext): stri
     "- 不要计算系统会负责的结果（第六节）。",
     "",
   ].join("\n");
+}
+
+export function buildPrompt(
+  spec: ExperimentSpec,
+  context?: PromptContext,
+  options: PromptOptions = {}
+): string {
+  const source = options.source ?? "photo";
 
   const schemaSection = [
     "## 十、JSONC 模板（填写目标）",
@@ -207,13 +306,13 @@ export function buildPrompt(spec: ExperimentSpec, context?: PromptContext): stri
   ].join("\n");
 
   return [
-    header,
+    headerSection(spec, source),
     theorySection(spec, context),
     tableOverview(spec),
-    rulesSection(spec, context),
+    rulesSection(spec, context, source),
     forbiddenResults(spec),
     remarksSection(),
-    outputSection(spec),
+    outputSection(spec, source),
     schemaSection,
   ]
     .filter(Boolean)

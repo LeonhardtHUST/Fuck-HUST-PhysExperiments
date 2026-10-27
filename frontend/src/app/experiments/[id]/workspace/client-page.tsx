@@ -38,7 +38,8 @@ import {
   type ReportFormat,
 } from "@/lib/api";
 import DataInputTable from "@/components/workspace/DataInputTable";
-import ArtifactActions from "@/components/workspace/ArtifactActions";
+import ArtifactActions, { type OcrTarget } from "@/components/workspace/ArtifactActions";
+import { applyOcrValues, editableCellCount } from "@/lib/ocr-apply";
 import ArtifactRemarks from "@/components/workspace/ArtifactRemarks";
 import { rowIndexValue } from "@/lib/table-specs";
 import { getExperimentSpec } from "@/lib/experiment-specs";
@@ -442,6 +443,34 @@ function PolarizationWorkspace({
   const currentStepIndex = STEPS.findIndex((s) => s.id === step);
   const polarTable = (tableId: string) => POLARIZATION_SPEC.tables.find((table) => table.tableId === tableId);
 
+  /** 拍照录入：可填格按行优先排序，跳过首列（角度/序号由行序推导，不参与识别） */
+  const tableOcrTarget = (
+    tableId: string,
+    data: string[][],
+    setData: (updater: (previous: string[][]) => string[][]) => void,
+    readOnlyColumns: boolean[]
+  ): OcrTarget => ({
+    tableId,
+    title: polarTable(tableId)?.title ?? tableId,
+    expectedCellCount: editableCellCount(data, readOnlyColumns),
+    apply: (values, overwriteExisting) =>
+      setData((previous) => applyOcrValues(previous, values, { readOnlyColumns, overwriteExisting })),
+  });
+
+  const ocrTargetFor = (tableId: string): OcrTarget => {
+    if (tableId === "halfwave") {
+      return tableOcrTarget(tableId, hwData, setHwData, [true, false, false, false, false]);
+    }
+    if (tableId === "quarterwave") {
+      return tableOcrTarget(tableId, qwData, setQwData, [true, false]);
+    }
+    if (tableId === "circular") {
+      return tableOcrTarget(tableId, circData, setCircData, [true, false]);
+    }
+    return tableOcrTarget("malus", malusData, setMalusData, [true, false, false]);
+  };
+  const allOcrTargets = ["malus", "halfwave", "quarterwave", "circular"].map(ocrTargetFor);
+
   const tableActions = (tableId: string) => (
     <ArtifactActions
       experimentId={experiment.id}
@@ -450,6 +479,7 @@ function PolarizationWorkspace({
       onImport={applyArtifact}
       tableRemarks={notes?.tableRemarks}
       onClearRemarks={() => clearTableNotes(tableId)}
+      ocrTargets={[ocrTargetFor(tableId)]}
       variant="table"
     />
   );
@@ -650,6 +680,7 @@ function PolarizationWorkspace({
                 tableRemarks={notes?.tableRemarks}
                 computed={notes?.computed}
                 onClearRemarks={() => setNotes(null)}
+                ocrTargets={allOcrTargets}
               />
               <DraftClearMenu
                 tables={POLARIZATION_SPEC.tables.map((table) => ({
@@ -817,7 +848,6 @@ function PolarizationWorkspace({
                   ]}
                   data={malusData}
                   onChange={setMalusData}
-                  ocr={{ experimentId: "polarization", tableId: "malus" }}
                   resizable
                   minRows={2}
                   onAddRow={addMalusRow}
@@ -875,7 +905,6 @@ function PolarizationWorkspace({
                   ]}
                   data={hwData}
                   onChange={setHwData}
-                  ocr={{ experimentId: "polarization", tableId: "halfwave" }}
                   resizable
                   minRows={2}
                   onAddRow={(rows) => addAngleRow(rows, 10, 0)}
@@ -898,7 +927,6 @@ function PolarizationWorkspace({
                   data={qwData}
                   onChange={setQwData}
                   compact
-                  ocr={{ experimentId: "polarization", tableId: "quarterwave" }}
                   resizable
                   minRows={3}
                   onAddRow={(rows) => addAngleRow(rows, 10, 0)}
@@ -921,7 +949,6 @@ function PolarizationWorkspace({
                   data={circData}
                   onChange={setCircData}
                   compact
-                  ocr={{ experimentId: "polarization", tableId: "circular" }}
                   resizable
                   minRows={3}
                   onAddRow={(rows) => addAngleRow(rows, 10, 0)}

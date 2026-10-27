@@ -31,9 +31,8 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { getInputRange, isOutsideRange, rangeLabel } from "@/lib/input-ranges";
-import OcrTableImporter from "./OcrTableImporter";
 import DataContributionPanel from "./DataContributionPanel";
-import ArtifactActions from "./ArtifactActions";
+import ArtifactActions, { type OcrTarget } from "./ArtifactActions";
 import ArtifactRemarks from "./ArtifactRemarks";
 import { DraftClearMenu, DraftRestoreBanner } from "./WorkspaceDraftControls";
 import type { ArtifactInput } from "@/lib/experiment-artifact";
@@ -356,24 +355,40 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
     setResult(null);
   };
 
-  const applyCurrentOCR = (values: string[], overwriteExisting: boolean) => {
-    if (!current) return;
-    setDraft((previous) => {
-      let valueIndex = 0;
-      const rows = previous[current.id].rows.map((row) => {
-        const next = { ...row };
-        current.columns.forEach((column) => {
-          const value = values[valueIndex++]?.trim();
-          if (!value) return;
-          if (!overwriteExisting && (next[column.key] ?? "").trim()) return;
-          next[column.key] = value;
+  const applyOCRTo = useCallback(
+    (methodId: string, values: string[], overwriteExisting: boolean) => {
+      const method = config?.methods.find((item) => item.id === methodId);
+      if (!method) return;
+      setDraft((previous) => {
+        let valueIndex = 0;
+        const rows = previous[methodId].rows.map((row) => {
+          const next = { ...row };
+          method.columns.forEach((column) => {
+            const value = values[valueIndex++]?.trim();
+            if (!value) return;
+            if (!overwriteExisting && (next[column.key] ?? "").trim()) return;
+            next[column.key] = value;
+          });
+          return next;
         });
-        return next;
+        return { ...previous, [methodId]: { ...previous[methodId], rows } };
       });
-      return { ...previous, [current.id]: { ...previous[current.id], rows } };
-    });
-    setResult(null);
-  };
+      setResult(null);
+    },
+    [config]
+  );
+
+  /** 每张表都能从「导入 → 拍照录入」识别，写回仍走各表自己的草稿 */
+  const ocrTargets = useMemo<OcrTarget[]>(
+    () =>
+      (config?.methods ?? []).map((method) => ({
+        tableId: method.id,
+        title: method.name,
+        expectedCellCount: (draft[method.id]?.rows.length ?? 0) * method.columns.length,
+        apply: (values, overwriteExisting) => applyOCRTo(method.id, values, overwriteExisting),
+      })),
+    [applyOCRTo, config, draft]
+  );
 
   const act = async (key: string, action: () => Promise<void>) => {
     if (busy) return;
@@ -419,6 +434,7 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
             tableRemarks={notes?.tableRemarks}
             computed={notes?.computed}
             onClearRemarks={() => setNotes(null)}
+            ocrTargets={ocrTargets}
           />
           <DraftClearMenu
             tables={config.methods.map((method) => ({ id: method.id, title: method.name }))}
@@ -495,12 +511,6 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
               ))}
             </ul>
           )}
-          <OcrTableImporter
-            experimentId={id}
-            tableId={current.id}
-            expectedCellCount={(draft[current.id]?.rows.length ?? 0) * current.columns.length}
-            onApply={applyCurrentOCR}
-          />
           <div className="overflow-hidden rounded-xl border border-stone-200">
             <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] border-collapse text-sm">
@@ -565,6 +575,7 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
                   onImport={applyArtifact}
                   tableRemarks={notes?.tableRemarks}
                   onClearRemarks={() => clearTableNotes(current.id)}
+                  ocrTargets={ocrTargets.filter((target) => target.tableId === current.id)}
                   variant="table"
                 />
               </div>

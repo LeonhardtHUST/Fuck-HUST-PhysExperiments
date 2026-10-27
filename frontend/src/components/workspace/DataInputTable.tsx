@@ -3,7 +3,6 @@
 import { useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { isOutsideRange, rangeLabel, type InputRangeHint } from "@/lib/input-ranges";
-import OcrTableImporter from "./OcrTableImporter";
 import { appendRow, removeRowAt } from "./table-rows";
 
 interface Header {
@@ -18,14 +17,13 @@ interface Props {
   data: string[][];
   onChange: (data: string[][]) => void;
   compact?: boolean;
-  ocr?: { experimentId: string; tableId: string };
   /** 允许自由增删数据行（未传时渲染与固定表格完全一致） */
   resizable?: boolean;
   /** 最少保留行数，删除到下限时禁用删除按钮 */
   minRows?: number;
   /** 自定义“添加一行”的行内容（缺省按表头列数补空行，首列自动编号） */
   onAddRow?: (rows: string[][]) => string[][];
-  /** 底部工具条右侧的附加操作（导出/导入/Schema），未传时保持原有渲染 */
+  /** 底部工具条右侧的附加操作（导入/导出），未传时保持原有渲染 */
   actions?: React.ReactNode;
 }
 
@@ -34,7 +32,6 @@ export default function DataInputTable({
   data,
   onChange,
   compact,
-  ocr,
   resizable,
   minRows = 1,
   onAddRow,
@@ -149,23 +146,6 @@ export default function DataInputTable({
     [data, headers, onChange]
   );
 
-  const editableCoordinates = data.flatMap((row, rowIndex) =>
-    row.flatMap((_, columnIndex) =>
-      headers[columnIndex]?.readOnly ? [] : [[rowIndex, columnIndex] as const]
-    )
-  );
-
-  const applyOCR = (values: string[], overwriteExisting: boolean) => {
-    const next = data.map((row) => [...row]);
-    editableCoordinates.forEach(([rowIndex, columnIndex], index) => {
-      const value = values[index]?.trim();
-      if (!value) return;
-      if (!overwriteExisting && next[rowIndex][columnIndex].trim()) return;
-      next[rowIndex][columnIndex] = value;
-    });
-    onChange(next);
-  };
-
   const addRowButton = (
     <button
       type="button"
@@ -177,15 +157,6 @@ export default function DataInputTable({
   );
 
   return (
-    <>
-      {ocr && editableCoordinates.length > 0 && (
-        <OcrTableImporter
-          experimentId={ocr.experimentId}
-          tableId={ocr.tableId}
-          expectedCellCount={editableCoordinates.length}
-          onApply={applyOCR}
-        />
-      )}
       <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
@@ -334,6 +305,5 @@ export default function DataInputTable({
         )
       )}
     </div>
-    </>
   );
 }
