@@ -24,5 +24,8 @@ datasets/
 # CodeBuddy workspace metadata (local plans/session files, never tracked):
 .codebuddy/
 
+# WorkBuddy workspace metadata (local memory/session files, never tracked):
+.workbuddy/
+
 # Deployment logs and the resolved CloudBase API address cache:
 .dev-logs/
