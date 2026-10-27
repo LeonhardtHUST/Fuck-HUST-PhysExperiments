@@ -64,6 +64,15 @@ python -m ocr_dataset.templates --check                        # 必须通过
 
 数据表支持自由增删行，校验按配置里的最小行数放行（见提交 `19d8054`、`ead6561`）。不要在新代码里假设固定行数或按空行截断。
 
+### 实验数据只有「导入 / 导出」两个语义入口
+
+`ArtifactActions.tsx` 是全站唯一的实验数据出入口，别再往工具条上挂新按钮：
+
+- 顶层只两个按钮：`导入数据 / 导出数据`（单表处为 `导入此表 / 导出此表`）。
+- 导入弹窗内的页签顺序固定：`拍照录入` → `粘贴 / 文件` → `AI Prompt` → `Schema` → `导入备注`；OCR 页签只在传了 `ocrTargets` 时出现，备注页签只在当前 scope 有备注时出现。
+- 拍照录入不再有表格上方的常驻面板（`DataInputTable` 的 `ocr` prop 已删除）。各工作台通过 `ocrTargets`（`{ tableId, title, expectedCellCount, apply }`）提供写回闭包，二维表格一律用 `frontend/src/lib/ocr-apply.ts` 的 `applyOcrValues` 填格，已跳过只读列（序号、按行序推导的角度），不要各写一份。
+- AI Prompt 有两版，见 `frontend/src/lib/experiment-prompt.ts` 的 `PromptSource`：`photo`（默认，记录纸照片，读数不确定）与 `electronic`（仪器导出/CSV/Excel，数值确定）。共用第一~四、六~七、十节；只允许在 header、第五节填写规则、第八节第 5 条、第九节自检清单上分叉，别把照片版的取数约束带进电子版。
+
 ### 本地草稿只认 `physlab:draft:v1:<slug>`
 
 三个工作台（通用、声速光速、偏振光）的自动保存走 `frontend/src/hooks/useWorkspaceDraft.ts` + `frontend/src/lib/workspace-draft.ts`：
@@ -172,9 +181,11 @@ git --no-pager diff --ignore-cr-at-eol --numstat -- <path>  # 只剩真实改动
 
 `soundlight` 的 spec 表 id 是 `${methodId}-${tableIndex}`（草稿、`DRAFT_TABLE_OPTIONS` 都用它），但 `SoundLightWorkspace` 内部 `cell` 的 key 是 `${methodId}#${tableIndex}`。恢复时若把 `rowsToGrid` 的结果写进 `${id}-${ti}`，`getRows` 读不到 → 页面仍是空表；随后自动保存又会把“空的当前状态”写回，key 被删，症状是「刷新后数据全没了，而且提示条消失」。验证方式：填值 → 刷新 → 单元格必须有值且出现提示条。
 
-### 15. `fixed inset-0` 弹窗会被卡片的 `backdrop-filter` 收进卡片
+### 15. `fixed inset-0` 弹窗会被卡片的 `backdrop-filter` / `transform` 收进卡片
 
-工作台卡片用了 `backdrop-blur`，它会给后代 `fixed` 元素创建包含块，遮罩不再是视口大小：1280×720 下确认弹窗 `top` 量到 580、`bottom` 741 直接出屏。处置：`WorkspaceDraftControls` 的确认框用 `createPortal(..., document.body)` 挂到 body。判断方法：`document.querySelector('[role=dialog]').getBoundingClientRect()` 的 `bottom` 必须 ≤ `innerHeight`。
+工作台卡片用了 `backdrop-blur`，`animate-rise-in` 一类动画也会留下 `transform`；两者都会给后代 `fixed` 元素创建包含块，遮罩不再是视口大小：1280×720 下确认弹窗 `top` 量到 580、`bottom` 741 直接出屏；`ArtifactActions` 的导入弹窗同样会被锚到 `animate-rise-in` 区块（1440×900 下 `y=607`，底部落到 1012，只有一半在屏内）。
+
+处置：所有浮层一律 `createPortal(..., document.body)`（`WorkspaceDraftControls` 的确认框、`ArtifactActions` 的导入/导出弹窗都已这么做），并加 `mounted` 门避免 SSR 期访问 `document`。判断方法：`document.querySelector('[role=dialog]').getBoundingClientRect()` 的 `bottom` 必须 ≤ `innerHeight`，且遮罩父节点的 rect 等于视口。
 
 ### 16. 下拉菜单在矮视口会被底边裁掉
 
