@@ -254,6 +254,17 @@ remove_dir() {
 
 build_frontend() {
     echo "Building frontend (npm run build) ..."
+    # A killed build can leave .next/lock behind, which makes next refuse to
+    # start with "Another next build process is already running". Clear it only
+    # when no live next build owns it.
+    local lock_file="$FRONTEND_DIR/.next/lock"
+    if [[ -e "$lock_file" ]]; then
+        if command -v pgrep >/dev/null 2>&1 && pgrep -f "next.*build" >/dev/null 2>&1; then
+            die "another next build is running; wait for it to finish (or stop it), then retry"
+        fi
+        rm -f "$lock_file"
+        echo "Removed stale .next/lock left by an interrupted build."
+    fi
     remove_dir "$OUT_DIR"
     ( cd "$FRONTEND_DIR" && npm run build ) || die "npm run build failed."
     [[ -f "$OUT_DIR/index.html" ]] ||

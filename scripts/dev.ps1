@@ -199,6 +199,19 @@ if (-not $nodeExe) { throw 'Could not resolve the node executable on PATH.' }
 
 function Invoke-FrontendBuild {
     Write-Host 'Building frontend (npm run build) ...'
+    # A killed build can leave .next/lock behind, which makes next refuse to
+    # start with "Another next build process is already running". Clear it only
+    # when no live next build owns it.
+    $lockFile = Join-Path $frontend '.next\lock'
+    if (Test-Path $lockFile) {
+        $activeBuild = Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
+            Where-Object { $_.CommandLine -like '*next*' -and $_.CommandLine -like '*build*' }
+        if ($activeBuild) {
+            throw 'Another next build is running. Wait for it to finish (or stop it), then retry.'
+        }
+        Remove-Item -Force $lockFile
+        Write-Host 'Removed stale .next/lock left by an interrupted build.'
+    }
     # Clean the export ourselves: next build deletes it through fs.rm, which
     # bulk-delete guards (IDE shims) can block with a confusing error.
     if (Test-Path $outDir) { Remove-Item -Recurse -Force $outDir }
