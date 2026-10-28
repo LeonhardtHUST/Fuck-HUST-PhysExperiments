@@ -2,12 +2,16 @@
   "name": "frontend-app",
   "version": "2.0.0-beta.1",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vinext dev",
     "build": "node scripts/build.mjs",
     "start": "vinext start",
     "preview": "vinext start",
-    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/*.test.ts"
+    "check": "vp check",
+    "lint": "vp lint",
+    "fmt": "vp fmt",
+    "test": "vp test"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
@@ -28,7 +32,10 @@
     "@vitejs/plugin-rsc": "^0.5.37",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vite": "^8.0.0"
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.4.0",
+    "vite-plus": "1.4.0"
   },
-  "type": "module"
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.4.0"
+  }
 }

@@ -2,7 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import vinext from "vinext";
-import { defineConfig } from "vite";
+import { defineConfig, lazyPlugins } from "vite-plus";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 
@@ -18,14 +18,26 @@ const publicEnv = (name: string) => ({
 });
 
 export default defineConfig({
-  plugins: [
+  fmt: { ignorePatterns: ["out/**", "dist/**", "package-lock.json"] },
+  lint: {
+    jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
+    rules: { "vite-plus/prefer-vite-plus-imports": "error" },
+    options: { typeAware: true, typeCheck: true },
+    ignorePatterns: ["out/**", "dist/**", ".vinext/**"],
+  },
+  // 单测是纯 Node 逻辑（含读源码做断言的用例），不需要 DOM 环境。
+  test: {
+    include: ["tests/**/*.test.ts"],
+    environment: "node",
+  },
+  plugins: lazyPlugins(() => [
     vinext({
       // 产物契约：四条托管通道（serve-static / GitHub Pages / Oracle nginx /
       // CloudBase）全部消费 frontend/out，目录名不能变。vinext 的默认值是
       // dist/client，`build.outDir` 管不到它，只有这个选项能改。
       clientOutDir: "out",
     }),
-  ],
+  ]),
   resolve: {
     alias: { "@": path.resolve(root, "src") },
   },

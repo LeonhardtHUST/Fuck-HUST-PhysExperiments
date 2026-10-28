@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import test from "node:test";
+import { test } from "vite-plus/test";
 
 /**
  * The "数据特征参考" card is only as good as its numbers, so the data shipped to
