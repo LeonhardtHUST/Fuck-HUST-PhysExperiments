@@ -202,3 +202,199 @@ def test_public_config_matches_engine_columns_and_defaults():
         config_defaults = {param["key"]: param["default"]
                            for param in item["params"]}
         assert config_defaults == engine._PARAM_DEFAULTS[engine_id]
+
+
+# ────────────────────────────────── 时差法（tof）：解码 / 剔除 / 拟合
+
+def _tof_rows(n=12, v=1500.0, t0=20.0, start=40.0, step=20.0):
+    """固定延迟模型 T = T0 + L/v（对应分析报告 Case F）：T0 使逐点 v 系统性偏低。"""
+    distance = [start + step * i for i in range(n)]
+    return {"L": distance, "T": [t0 + 1000.0 * l / v for l in distance]}
+
+
+def _result(run, key):
+    return next(item["value"] for item in run["results"] if item["key"] == key)
+
+
+def test_tof_fit_is_the_primary_result():
+    run = engine.analyze("tof", _tof_rows(), {})
+    assert run["status"] == "success", run.get("errors")
+    assert math.isclose(_result(run, "v_fit"), 1500.0, rel_tol=1e-9)
+    assert math.isclose(_result(run, "slope"), 1000.0 / 1500.0, rel_tol=1e-6)
+    assert math.isclose(_result(run, "intercept"), 20.0, abs_tol=1e-6)
+    assert math.isclose(_result(run, "r2"), 1.0, abs_tol=1e-9)
+    assert _result(run, "valid_points") == 12
+    assert _result(run, "excluded_points") == 0
+    assert run["warnings"] == []
+    assert [item["key"] for item in run["results"]] == [
+        "v_fit", "slope", "intercept", "r2", "error_rel",
+        "v_mean", "v_std", "valid_points", "excluded_points",
+    ]
+
+
+def test_tof_pointwise_mean_stays_below_the_fit_under_fixed_delay():
+    """固定延迟把短距离点拉低：逐点均值必须明显低于拟合声速，否则说明模型退化。"""
+    run = engine.analyze("tof", _tof_rows(), {})
+    assert run["status"] == "success", run.get("errors")
+    assert _result(run, "v_mean") < 0.95 * _result(run, "v_fit")
+    assert _result(run, "v_std") > 0.0
+
+
+def test_tof_single_wrap_is_recovered_to_the_same_result():
+    """T<0 视为有符号 16 位计数差；恢复后结果应与未回绕时完全一致。
+
+    输入契约只有 T(μs) 一个字段（没有 count 层），故用 T-65536 等价模拟
+    设备导出的有符号差值；真实 rx/tx 时间戳无法在本仓库构造。
+    """
+    plain = engine.analyze("tof", _tof_rows(), {})
+    wrapped_rows = _tof_rows()
+    wrapped_rows["T"][4] -= engine.TOF_COUNT_MOD
+    wrapped = engine.analyze("tof", wrapped_rows, {})
+    assert wrapped["status"] == "success", wrapped.get("errors")
+    assert wrapped["arrays"]["recovered_rows"] == [5]
+    assert math.isclose(_result(wrapped, "v_fit"), _result(plain, "v_fit"), rel_tol=1e-12)
+    assert len(wrapped["warnings"]) == 1
+    assert "第 5 行" in wrapped["warnings"][0]
+    assert "回绕" in wrapped["warnings"][0]
+
+
+def test_tof_never_shifts_positive_readings():
+    """正数 T 一律原样使用：不做 ±65536，也不因离群而剔除。"""
+    rows = _tof_rows()
+    rows["T"][-1] += engine.TOF_COUNT_MOD
+    run = engine.analyze("tof", rows, {})
+    assert run["status"] == "success", run.get("errors")
+    assert run["arrays"]["T"] == rows["T"]
+    assert _result(run, "valid_points") == 12
+    assert _result(run, "excluded_points") == 0
+
+
+def test_tof_missing_rows_are_skipped_and_raw_table_keeps_every_row():
+    rows = _tof_rows()
+    for index in (0, 2, 5, 8, 11):
+        rows["T"][index] = None
+    run = engine.analyze("tof", rows, {})
+    assert run["status"] == "success", run.get("errors")
+    assert _result(run, "valid_points") == 7
+    assert _result(run, "excluded_points") == 5
+    assert run["arrays"]["dropped_rows"] == [1, 3, 6, 9, 12]
+    assert len(run["warnings"]) == 5
+
+    # 报告原始表必须保留全部录入行（表头 + 12 行），剔除行留空、行序不变
+    raw_tables = [block for block in docs._raw_blocks([("tof", run)])
+                  if block.get("kind") == "table"]
+    assert len(raw_tables[0]["rows"]) == 13
+    body = raw_tables[0]["rows"][1:]
+    assert body[0][2]["text"] == ""          # 第 1 行 T 被剔除 → 留空
+    assert body[1][2]["text"] != ""          # 第 2 行有效 → 保留
+
+
+def test_tof_three_valid_points_are_enough():
+    rows = {"L": [40.0, 80.0, 140.0, 200.0],
+            "T": [46.666, 73.333, 113.333, None]}
+    run = engine.analyze("tof", rows, {})
+    assert run["status"] == "success", run.get("errors")
+    assert _result(run, "valid_points") == 3
+    assert math.isclose(_result(run, "v_fit"), 1500.0, rel_tol=1e-3)
+
+
+def test_tof_two_valid_points_report_insufficient_points():
+    rows = {"L": [40.0, 60.0, 80.0, 100.0],
+            "T": [46.666, 60.0, None, None]}
+    run = engine.analyze("tof", rows, {})
+    assert run["status"] == "validation_error"
+    message = "；".join(run["errors"])
+    assert "有效点不足" in message
+    assert "有效 2 点" in message
+    assert "至少需要 3 点" in message
+    assert "计算失败：" not in message
+
+
+def test_tof_out_of_range_speed_only_warns():
+    """把 count 当 μs 之类的单位错误只告警，由使用者核对；不整组判失败。"""
+    rows = _tof_rows()
+    rows["T"] = [value * 1000.0 for value in rows["T"]]
+    run = engine.analyze("tof", rows, {})
+    assert run["status"] == "success", run.get("errors")
+    assert any("不在" in warning and "常见范围" in warning for warning in run["warnings"])
+
+
+def test_tof_unrecoverable_negative_reading_is_dropped():
+    rows = _tof_rows(n=6)
+    rows["T"][0] = -20000.0
+    run = engine.analyze("tof", rows, {})
+    assert run["status"] == "success", run.get("errors")
+    assert run["arrays"]["dropped_rows"] == [1]
+    assert any("无法可靠解码" in warning for warning in run["warnings"])
+
+
+def test_tof_zero_reading_is_dropped_instead_of_failing():
+    rows = _tof_rows()
+    rows["T"][2] = 0.0
+    run = engine.analyze("tof", rows, {})
+    assert run["status"] == "success", run.get("errors")
+    assert run["arrays"]["dropped_rows"] == [3]
+    assert _result(run, "valid_points") == 11
+
+
+def test_tof_single_distance_and_reversed_slope_fail_with_reasons():
+    same = {"L": [100.0, 100.0, 100.0], "T": [90.0, 90.0, 90.0]}
+    flat = engine.analyze("tof", same, {})
+    assert flat["status"] == "validation_error"
+    assert any("有效传播距离种类不足" in error for error in flat["errors"])
+
+    reversed_rows = {"L": [40.0, 80.0, 140.0], "T": [120.0, 90.0, 60.0]}
+    backwards = engine.analyze("tof", reversed_rows, {})
+    assert backwards["status"] == "validation_error"
+    assert any("拟合斜率不为正" in error for error in backwards["errors"])
+
+
+def test_tof_reproduces_the_reported_seven_point_dataset():
+    """分析报告 §4 给出的 7 组可确认有效数据（数据源自报告，非设备原始导出）。"""
+    rows = {"L": [40.0, 60.0, 80.0, 100.0, 140.0, 180.06, 240.0],
+            "T": [45.0, 58.0, 71.0, 83.0, 109.0, 135.0, 174.0]}
+    run = engine.analyze("tof", rows, {})
+    assert run["status"] == "success", run.get("errors")
+    assert math.isclose(_result(run, "v_fit"), 1552.8, rel_tol=1e-3)
+    assert math.isclose(_result(run, "slope"), 0.6440025, rel_tol=1e-4)
+    assert math.isclose(_result(run, "intercept"), 19.1428, rel_tol=2e-3)
+    assert math.isclose(_result(run, "r2"), 0.999948, rel_tol=1e-4)
+    assert math.isclose(_result(run, "error_rel"), 4.92, abs_tol=0.05)
+
+
+def test_tof_report_text_states_fit_and_constant_reference():
+    run = engine.analyze("tof", _tof_rows(), {})
+    text = "\n".join(block.get("text", "") for block in docs._proc_1c(run))
+    assert "1000/a" in text
+    assert "R²" in text
+    assert f"{engine.SOUND_WATER_REF:g}" in text
+    assert "固定延迟" in text
+
+
+def test_tof_report_text_lists_dropped_rows():
+    rows = _tof_rows()
+    rows["T"][2] = 0.0
+    run = engine.analyze("tof", rows, {})
+    text = "\n".join(block.get("text", "") for block in docs._proc_1c(run))
+    assert "数据修复与剔除说明" in text
+    assert "第 3 行" in text
+
+
+def test_tof_process_method_exposes_warnings():
+    rows = _tof_rows()
+    rows["T"][2] = None
+    payload = engine.process_method("tof", rows, {})
+    assert payload["status"] == "success", payload.get("errors")
+    assert isinstance(payload["warnings"], list) and len(payload["warnings"]) == 1
+
+
+def test_soundlight_config_outputs_match_tof_results():
+    config_path = (Path(__file__).parents[1] / "experiments" / "soundlight"
+                   / "config.json")
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    tof = next(item for item in config if item["id"] == "tof")
+    run = engine.analyze("tof", _tof_rows(), {})
+    assert [output["key"] for output in tof["outputs"]] == [
+        item["key"] for item in run["results"]
+    ]
+

@@ -174,8 +174,15 @@
       "u_a"
     ],
     "tof": [
+      "v_fit",
+      "slope",
+      "intercept",
+      "r2",
+      "error_rel",
       "v_mean",
-      "v_std"
+      "v_std",
+      "valid_points",
+      "excluded_points"
     ],
     "light_sine": [
       "c_exp",
