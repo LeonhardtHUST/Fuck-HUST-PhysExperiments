@@ -201,6 +201,18 @@ Get-NetTCPConnection -LocalPort 8001,3000 -State Listen -ErrorAction SilentlyCon
 
 有监听就重新 `goto` 同一深链（必要时等 2s），没有监听才按「本地运行（开发者）」重新 `npm run dev -- --detach --no-browser`。别在报错页上继续 `eval` 判断业务逻辑。
 
+### 18. sound-light 的校验、arrays、报告三处都按「列名 / 长度 / 段位」隐式耦合
+
+`backend/experiments/soundlight/` 是手写行式引擎，不是通用 `ConfiguredExperiment`，改它时踩过下面五个坑（时差法 tof 改造时全部命中）：
+
+1. **按列名写的守卫会跨方法误伤**。`engine.analyze` 里 `for key in ("T","dt")` 的 `>0` 检查本意是光速法的比值分母与差频周期，但 tof 的列名也叫 `T`，于是「T 必须全部大于零，不能删除无效测量点后计算」把整组 tof 判死。任何整列级校验都必须先按 `method` 分派（`light_square` 在 441 行已归一成 `light_sine`）。
+2. **`arrays` 混进 `None` 或非数值键 = 假「计算失败」**。`analyze` 末尾的有限性检查对 `None` 调 `math.isfinite` 会抛 `TypeError`，被兜底成 `计算失败：…`，看起来像数值崩溃，实际是结构问题。原始表需要保留空位时用 `L_all/T_all`（可含 `None`），并让 `_assert_finite` 只校验数值项。
+3. **报告原始数据表的行数由 `_seq_filled` 的 filler 长度决定**（`docs.py:344`）。用剔除后的 `L/T` 渲染 `sl_2_tof` 会让表静默少行、后面整表错位；必须用原样录入的 `L_all/T_all`。
+4. **`report_blocks` 走 `_table_entries`，只从 `_raw_blocks` 里挑 `kind=="table"`**，同一函数里 `_cap(...)` 生成的说明文字会在正式报告里被丢掉。给读者看的说明只能放第三部分（`_proc_1c` / `_analysis_blocks`），或改用表格区的标题。
+5. **`latex()` 是 Matplotlib mathtext，不能含中文**。写了 `\text{诊断量}` 会刷一屏 `Font 'rm' does not have a glyph ... substituting with a dummy symbol`，PDF/Word 里变成方块。中文说明写在 `_cap` 正文，公式只放符号。
+
+另外：`SoundLightWorkspace.tsx` 的 `isMethodFilled` 原本要求每个格子非空，只要 tof 表里有空格子，「完整报告」的请求体就**不含**该方法且不再报错（静默漏方法）。放宽容错计算的方法必须同步放宽这里。
+
 ## 提交习惯
 
 - 提交信息用中文 Conventional Commits，scope 取模块名：`feat(workspace): ...`、`fix(gmr): ...`、`docs(readme): ...`。
