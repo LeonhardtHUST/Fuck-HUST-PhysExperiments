@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -11,7 +11,6 @@ import {
   Download,
   FileCode2,
   FileType,
-  Eye,
   Loader2,
   AlertCircle,
   CheckCircle2,
@@ -26,7 +25,10 @@ import {
 import { cn } from "@/lib/utils";
 import { getInputRange, isOutsideRange, rangeLabel, type InputRangeHint } from "@/lib/input-ranges";
 import DataInputTable from "@/components/workspace/DataInputTable";
-import ArtifactActions, { type OcrTarget } from "@/components/workspace/ArtifactActions";
+import ArtifactActions, {
+  type ArtifactActionsHandle,
+  type OcrTarget,
+} from "@/components/workspace/ArtifactActions";
 import { applyOcrValues, editableCellCount } from "@/lib/ocr-apply";
 import ArtifactRemarks from "@/components/workspace/ArtifactRemarks";
 import { trimTrailingEmptyRows } from "@/components/workspace/table-rows";
@@ -332,6 +334,8 @@ export default function SoundLightWorkspace() {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dlError, setDlError] = useState<string | null>(null);
+  /** 报告横幅与工具栏指向同一个导出弹窗 */
+  const dialogRef = useRef<ArtifactActionsHandle>(null);
   // per processed method: response + submitted data
   const [processed, setProcessed] = useState<
     Record<
@@ -787,6 +791,7 @@ export default function SoundLightWorkspace() {
 
             <div className="mb-4 flex flex-wrap justify-end gap-2">
               <ArtifactActions
+                ref={dialogRef}
                 experimentId={EXP_ID}
                 scope={{ kind: "experiment" }}
                 collect={collectArtifact}
@@ -796,6 +801,18 @@ export default function SoundLightWorkspace() {
                 computed={notes?.computed}
                 onClearRemarks={() => setNotes(null)}
                 ocrTargets={METHODS.flatMap((mspec) => mspec.tables.map((_, ti) => ocrTargetFor(mspec.id, ti)))}
+                error={dlError}
+                recordSheet={{
+                  preview: () => runDownload("preview", () => previewRecordSheet(EXP_ID)),
+                  download: (format) => runDownload(`record-${format}`, () => downloadRecordSheet(format, EXP_ID)),
+                }}
+                report={{
+                  download: (format) =>
+                    runDownload(`quick-report-${format}`, () => downloadFinalReport(format, filledAllReportData())),
+                  disabled: !requiredAllFilled,
+                  disabledHint: `必做还差：${missingFill.join("、")}；填完后即可生成完整报告。`,
+                  collection: { collection, gate },
+                }}
               />
               <DraftClearMenu
                 tables={DRAFT_TABLE_OPTIONS}
@@ -804,43 +821,6 @@ export default function SoundLightWorkspace() {
                 onReset={resetAll}
               />
             </div>
-
-            <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-stone-200 bg-stone-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-bold text-stone-800">需要纸质记录表？</p>
-                <p className="mt-0.5 text-xs text-stone-400">无需离开录入页，可直接预览或下载。</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => runDownload("preview", () => previewRecordSheet(EXP_ID))}
-                  disabled={busyKey !== null}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 text-xs font-semibold text-stone-700 disabled:opacity-50"
-                >
-                  <Eye className="h-3.5 w-3.5" />预览
-                </button>
-                <button
-                  onClick={() => runDownload("record-docx", () => downloadRecordSheet("docx", EXP_ID))}
-                  disabled={busyKey !== null}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-stone-900 px-3 text-xs font-semibold text-white disabled:opacity-50"
-                >
-                  {busyKey === "record-docx" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
-                  记录表 Word
-                </button>
-                <button
-                  onClick={() => runDownload("record-pdf", () => downloadRecordSheet("pdf", EXP_ID))}
-                  disabled={busyKey !== null}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white disabled:opacity-50"
-                >
-                  {busyKey === "record-pdf" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                  记录表 PDF
-                </button>
-              </div>
-            </div>
-            {dlError && (
-              <p className="mb-6 text-xs font-medium text-red-500" role="alert">
-                {dlError}
-              </p>
-            )}
 
             {notes && (
               <ArtifactRemarks
@@ -921,58 +901,21 @@ export default function SoundLightWorkspace() {
                 </p>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-2">
-                <div className="flex flex-wrap justify-end gap-2">
                 <button
-                  onClick={() =>
-                    runDownload("quick-report-docx", () =>
-                      downloadFinalReport("docx", filledAllReportData())
-                    )
-                  }
+                  onClick={() => dialogRef.current?.openExport("report")}
                   disabled={busyKey !== null || !requiredAllFilled}
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-stone-900 px-4 text-xs font-semibold text-white transition-colors hover:bg-stone-700 disabled:opacity-40"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 transition-colors hover:bg-indigo-700 disabled:opacity-40"
                 >
-                  {busyKey === "quick-report-docx" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
-                  完整 · Word
+                  {busyKey?.startsWith("quick-report") ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileDown className="h-4 w-4" />
+                  )}
+                  生成完整报告
                 </button>
-                <button
-                  onClick={() =>
-                    runDownload("quick-report-pdf", () =>
-                      downloadFinalReport("pdf", filledAllReportData())
-                    )
-                  }
-                  disabled={busyKey !== null || !requiredAllFilled}
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-xs font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-40"
-                >
-                  {busyKey === "quick-report-pdf" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                  完整 · PDF
-                </button>
-                <button
-                  onClick={() =>
-                    runDownload("quick-report-md", () =>
-                      downloadFinalReport("md", filledAllReportData())
-                    )
-                  }
-                  disabled={busyKey !== null || !requiredAllFilled}
-                  title="下载 Markdown 版完整报告"
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white px-4 text-xs font-semibold text-stone-700 transition-colors hover:border-stone-400 disabled:opacity-40"
-                >
-                  {busyKey === "quick-report-md" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileType className="h-3.5 w-3.5" />}
-                  完整 · MD
-                </button>
-                <button
-                  onClick={() =>
-                    runDownload("quick-report-jsonc", () =>
-                      downloadFinalReport("jsonc", filledAllReportData())
-                    )
-                  }
-                  disabled={busyKey !== null || !requiredAllFilled}
-                  title="下载 JSONC 版完整报告"
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white px-4 text-xs font-semibold text-stone-700 transition-colors hover:border-stone-400 disabled:opacity-40"
-                >
-                  {busyKey === "quick-report-jsonc" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileCode2 className="h-3.5 w-3.5" />}
-                  完整 · JSONC
-                </button>
-                </div>
+                <p className="text-[11px] leading-4 text-stone-400">
+                  纸质记录表与读数 JSON 也在「导出」里
+                </p>
                 <DataCollectionOptInRow collection={collection} gate={gate} />
               </div>
             </div>

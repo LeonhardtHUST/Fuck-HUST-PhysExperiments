@@ -7,11 +7,7 @@ import {
   ArrowLeft,
   BarChart3,
   CheckCircle2,
-  Download,
-  FileCode2,
   FileDown,
-  FileText,
-  FileType,
   FlaskConical,
   Loader2,
   Play,
@@ -34,7 +30,10 @@ import { getInputRange, isOutsideRange, rangeLabel } from "@/lib/input-ranges";
 import DataCollectionConsentOverlays from "./DataCollectionConsentOverlays";
 import DataCollectionOptInRow from "./DataCollectionOptInRow";
 import { useDataCollectionConsent } from "@/hooks/useDataCollectionConsent";
-import ArtifactActions, { type OcrTarget } from "./ArtifactActions";
+import ArtifactActions, {
+  type ArtifactActionsHandle,
+  type OcrTarget,
+} from "./ArtifactActions";
 import ArtifactRemarks from "./ArtifactRemarks";
 import { DraftClearMenu, DraftRestoreBanner } from "./WorkspaceDraftControls";
 import type { ArtifactInput } from "@/lib/experiment-artifact";
@@ -132,6 +131,8 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState<ArtifactNotes | null>(null);
+  /** 完成度横幅与结果卡指向同一个导出弹窗 */
+  const dialogRef = useRef<ArtifactActionsHandle>(null);
   const inputRefs = useRef<(HTMLInputElement | null)[][]>([]);
 
   useEffect(() => {
@@ -430,9 +431,8 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-stone-500">{config.description}</p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
-          <button onClick={() => act("preview", () => previewRecordSheet(id))} disabled={!!busy} className="inline-flex h-10 items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 disabled:opacity-50"><FileText className="h-4 w-4" />预览记录表</button>
-          <button onClick={() => act("record", () => downloadRecordSheet("docx", id))} disabled={!!busy} className="inline-flex h-10 items-center gap-2 rounded-xl bg-stone-900 px-4 text-sm font-semibold text-white disabled:opacity-50"><FileDown className="h-4 w-4" />记录表 Word</button>
           <ArtifactActions
+            ref={dialogRef}
             experimentId={id}
             scope={{ kind: "experiment" }}
             collect={collectArtifact}
@@ -442,6 +442,15 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
             computed={notes?.computed}
             onClearRemarks={() => setNotes(null)}
             ocrTargets={ocrTargets}
+            error={error}
+            recordSheet={{
+              preview: () => previewRecordSheet(id),
+              download: (format) => downloadRecordSheet(format, id),
+            }}
+            report={{
+              download: (format) => act(format, () => downloadFinalReport(format)),
+              collection: { collection, gate },
+            }}
           />
           <DraftClearMenu
             tables={config.methods.map((method) => ({ id: method.id, title: method.name }))}
@@ -621,7 +630,7 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
           </div>
         </div>
         <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
-          <div className="flex flex-wrap gap-2 sm:justify-end">
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             <button
               onClick={process}
               disabled={!!busy}
@@ -632,33 +641,22 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
               预览结果
             </button>
             <button
-              onClick={() => act("docx", () => downloadFinalReport("docx"))}
+              onClick={() => dialogRef.current?.openExport("report")}
               disabled={!!busy}
-              title={basicReady ? "直接生成完整报告 Word" : "必做缺项会在报告中标注为缺项"}
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-stone-900 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-            ><FileText className="h-4 w-4" />报告 Word</button>
-            <button
-              onClick={() => act("pdf", () => downloadFinalReport("pdf"))}
-              disabled={!!busy}
-              title={basicReady ? "直接生成完整报告 PDF" : "必做缺项会在报告中标注为缺项"}
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-            ><Download className="h-4 w-4" />报告 PDF</button>
+              title={basicReady ? "生成完整报告" : "必做缺项会在报告中标注为缺项"}
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {busy && ["docx", "pdf", "md", "jsonc"].includes(busy) ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileDown className="h-4 w-4" />
+              )}
+              生成完整报告
+            </button>
           </div>
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            <span className="text-[11px] text-stone-400">更多格式</span>
-            <button
-              onClick={() => act("md", () => downloadFinalReport("md"))}
-              disabled={!!busy}
-              title="下载 Markdown 版完整报告（图片以 data URI 内嵌）"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 text-xs font-semibold text-stone-600 disabled:cursor-not-allowed disabled:opacity-40"
-            ><FileType className="h-3.5 w-3.5" />Markdown</button>
-            <button
-              onClick={() => act("jsonc", () => downloadFinalReport("jsonc"))}
-              disabled={!!busy}
-              title="下载 JSONC 版完整报告，结构见 docs/schemas/report.schema.json"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 text-xs font-semibold text-stone-600 disabled:cursor-not-allowed disabled:opacity-40"
-            ><FileCode2 className="h-3.5 w-3.5" />JSONC</button>
-          </div>
+          <p className="text-[11px] leading-4 text-stone-400 sm:text-right">
+            纸质记录表与读数 JSON 也在「导出」里
+          </p>
           <div className="sm:text-right">
             <DataCollectionOptInRow collection={collection} gate={gate} />
           </div>
@@ -686,29 +684,11 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
             </div>
             {result.status === "success" && <div className="flex flex-wrap gap-2">
               <button
-                onClick={() => act("docx", () => downloadFinalReport("docx"))}
+                onClick={() => dialogRef.current?.openExport("report")}
                 disabled={!!busy}
-                title={basicReady ? "下载完整报告 Word" : "必做缺项会在报告中标注为缺项"}
-                className="inline-flex h-10 items-center gap-2 rounded-xl bg-stone-900 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-              ><FileText className="h-4 w-4" />完整报告 Word</button>
-              <button
-                onClick={() => act("pdf", () => downloadFinalReport("pdf"))}
-                disabled={!!busy}
-                title={basicReady ? "下载完整报告 PDF" : "必做缺项会在报告中标注为缺项"}
-                className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-              ><Download className="h-4 w-4" />完整报告 PDF</button>
-              <button
-                onClick={() => act("md", () => downloadFinalReport("md"))}
-                disabled={!!busy}
-                title="下载 Markdown 版完整报告"
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 disabled:cursor-not-allowed disabled:opacity-40"
-              ><FileType className="h-4 w-4" />Markdown</button>
-              <button
-                onClick={() => act("jsonc", () => downloadFinalReport("jsonc"))}
-                disabled={!!busy}
-                title="下载 JSONC 版完整报告"
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 disabled:cursor-not-allowed disabled:opacity-40"
-              ><FileCode2 className="h-4 w-4" />JSONC</button>
+                title={basicReady ? "生成完整报告" : "必做缺项会在报告中标注为缺项"}
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+              ><FileDown className="h-4 w-4" />生成完整报告</button>
             </div>}
           </div>
           {!basicReady && (

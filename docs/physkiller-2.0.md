@@ -44,7 +44,7 @@
 ```
 /experiments/…（唯一入口，无模式参数）
      同一个实验工作台（录入 → OCR/手填 → 校验 → 计算 → 绘图）
-        ↓ 首次点任一报告格式按钮
+        ↓ 右上角「导出」→「完整报告」页签，首次点任一格式
      对话框：复选框「启用匿名化数据收集以帮助改进服务」+ 可选「附上记录表照片」
         ↓ 决定写入 localStorage 后继续生成报告
      报告生成成功 → commit（collection_mode=true，状态 confirmed）
@@ -54,7 +54,8 @@
 
 - 偏好存在 `physlab:data-collection-consent:v1`：`{"v":1,"status":"granted"|"declined","decidedAt":…}`。「是否问过」= key 是否存在，因此**弹过一次就不会再自动弹**；`shouldPrompt`（`frontend/src/lib/data-collection-consent.ts`）是唯一判定点。
 - 门放在 `downloadFinalReport` 内部（`await gate.ensureDecided()`），不在按钮 `onClick` 上，所以 `act` / `runDownload` 的 busy 幂等与错误处理完全不变。后端未启用或 `/status` 未返回时直接放行，不弹窗。
-- 报告区常驻一行「匿名化数据收集：已开启 / 已关闭 · 附上记录表照片 · 更改」。照片入口必须留在这行里：弹窗只问一次，而每次实验的记录表都是新的，只把上传放在弹窗里会让第二次实验起没有 session，`commit` 无处可落。
+- 「匿名分享」有两个常驻入口：导出弹窗「完整报告」页签里的面板（开关 + 照片 + 状态，`DataCollectionOptInRow` 的 `panel` 变体）与报告区的紧凑一行（`row` 变体）。照片入口必须留在常驻位置：弹窗只问一次，而每次实验的记录表都是新的，只把上传放在一次性询问里会让第二次实验起没有 session，`commit` 无处可落。
+- 后端 `enabled:false` 时面板不消失，落在「当前部署未开放」的可读状态；这是一个曾让「导出时找不到匿名分享」无法自查的坑。
 - `metadata.collection_mode` 仍由 `frontend/src/lib/api.ts` 硬编码 `true`，后端未改；`build-ocr`、`ocr_dataset/export.py` 依旧只接受 **confirmed 且 collection_mode=true** 的会话。
 - 撤回是彻底的：删除 session 目录（原图 + metadata）以及由它生成的图片、`samples.csv` / `rejected.csv` 行，并刷新 manifest 计数。
 - 开发者统计：`collection_sessions` 即参与实验数；`plain_sessions` 仍由后端返回但恒为 0（所有上传都来自明确同意），面板不再展示。

@@ -21,7 +21,6 @@ import {
   FileType,
   AlertCircle,
   CheckCircle2,
-  Eye,
   ChevronRight,
   ListChecks,
 } from "lucide-react";
@@ -677,7 +676,7 @@ function PolarizationWorkspace({
               className="mb-4"
             />
 
-            <div className="mb-4 flex flex-wrap justify-end gap-2">
+            <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
               <ArtifactActions
                 experimentId={experiment.id}
                 scope={{ kind: "experiment" }}
@@ -688,6 +687,11 @@ function PolarizationWorkspace({
                 computed={notes?.computed}
                 onClearRemarks={() => setNotes(null)}
                 ocrTargets={allOcrTargets}
+                error={dlError}
+                recordSheet={{
+                  preview: () => runDownload("preview", previewRecordSheet),
+                  download: (format) => runDownload(`record-${format}`, () => downloadRecordSheet(format)),
+                }}
               />
               <DraftClearMenu
                 tables={POLARIZATION_SPEC.tables.map((table) => ({
@@ -699,43 +703,6 @@ function PolarizationWorkspace({
                 onReset={resetAll}
               />
             </div>
-
-            <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-stone-200 bg-stone-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-bold text-stone-800">需要纸质记录表？</p>
-                <p className="mt-0.5 text-xs text-stone-400">无需离开录入页，可直接预览或下载。</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => runDownload("preview", previewRecordSheet)}
-                  disabled={busyKey !== null}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 text-xs font-semibold text-stone-700 disabled:opacity-50"
-                >
-                  <Eye className="h-3.5 w-3.5" />预览
-                </button>
-                <button
-                  onClick={() => runDownload("record-docx", () => downloadRecordSheet("docx"))}
-                  disabled={busyKey !== null}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-stone-900 px-3 text-xs font-semibold text-white disabled:opacity-50"
-                >
-                  {busyKey === "record-docx" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
-                  记录表 Word
-                </button>
-                <button
-                  onClick={() => runDownload("record-pdf", () => downloadRecordSheet("pdf"))}
-                  disabled={busyKey !== null}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white disabled:opacity-50"
-                >
-                  {busyKey === "record-pdf" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                  记录表 PDF
-                </button>
-              </div>
-            </div>
-            {dlError && (
-              <p className="mb-6 text-xs font-medium text-red-500" role="alert">
-                {dlError}
-              </p>
-            )}
 
             {notes && (
               <ArtifactRemarks

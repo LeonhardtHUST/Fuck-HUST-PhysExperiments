@@ -110,6 +110,44 @@ test("the report row states the choice and can change it", () => {
   assert.match(row, /更改/);
 });
 
+test("report / record sheet / readings share one export dialog", () => {
+  const actions = read("../src/components/workspace/ArtifactActions.tsx");
+  const reportTab = actions.slice(
+    actions.indexOf('exportTab === "report"'),
+    actions.indexOf('exportTab === "record"'),
+  );
+  const recordTab = actions.slice(
+    actions.indexOf('exportTab === "record"'),
+    actions.indexOf('exportTab === "data"'),
+  );
+
+  assert.match(actions, /export type ExportTab = "report" \| "record" \| "data";/);
+  assert.match(actions, /if \(report\) tabs\.push\("report"\);/);
+  assert.match(actions, /if \(recordSheet\) tabs\.push\("record"\);/);
+
+  // 匿名分享必须是报告页签里常驻的一块，而不是靠一次性的询问弹窗
+  assert.match(reportTab, /variant="panel"/);
+  assert.match(reportTab, /report\.collection/);
+  assert.match(reportTab, /REPORT_BUTTONS\.map/);
+  assert.match(recordTab, /recordSheet\.preview/);
+  assert.match(recordTab, /recordSheet\.download\("docx"\)/);
+  assert.match(recordTab, /recordSheet\.download\("pdf"\)/);
+
+  for (const [name, source] of [
+    ["generic", generic],
+    ["sound-light", soundLight],
+    ["polarization", polarization],
+  ] as const) {
+    assert.equal(source.includes("需要纸质记录表"), false, `${name} keeps a second record-sheet card`);
+    assert.equal(source.includes("记录表 Word"), false, `${name} keeps a standalone record-sheet button`);
+    assert.match(source, /recordSheet=\{\{/, `${name} must feed the dialog instead`);
+  }
+
+  // 报告格式只在弹窗里出现一次，页面上不再摊开四个按钮
+  assert.equal(soundLight.includes("完整 · PDF"), false, "sound-light keeps the inline format row");
+  assert.equal(soundLight.includes("完整 · JSONC"), false, "sound-light keeps the inline format row");
+});
+
 test("both overlays portal to the body", () => {
   for (const [name, source] of [["dialog", dialog], ["thanks", thanks]] as const) {
     assert.match(source, /createPortal\(/, name);
