@@ -1,8 +1,8 @@
-# PhysLab
+# NMSL-HUST-PhysExp
 
-### AI-powered Physics Laboratory Assistant
+### Next-Generation Model-Powered Synthesis Laboratory for HUST Physics Experiments
 
-PhysLab 是一个面向大学物理实验的 AI 助手。它帮助学生完成实验数据处理的最后一公里：
+模型驱动的下一代华中科技大学物理实验综合实验平台
 
 - **实验数据录入** —— 手写记录表拍照上传，自动识别成数据
 - **数据处理** —— 计算、误差分析、最小二乘拟合
