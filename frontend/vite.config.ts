@@ -18,6 +18,8 @@ const publicEnv = (name: string) => ({
 });
 
 export default defineConfig({
+  // 格式检查暂不纳入准入：仓库此前没有 formatter，全量 oxfmt 会改动 59 个文件，
+  // 留给独立的 chore commit。需要时 `vp fmt` 手动跑，`vp check --no-fmt` 是日常入口。
   fmt: { ignorePatterns: ["out/**", "dist/**", "package-lock.json"] },
   lint: {
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],

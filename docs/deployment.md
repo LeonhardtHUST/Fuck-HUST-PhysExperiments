@@ -4,7 +4,7 @@
 
 ## GitHub Pages
 
-仓库中的 Pages 工作流只发布 `frontend/` 的 Next.js 静态导出。仓库设置中需要将 Pages 的 Source 设为 **GitHub Actions**。
+仓库中的 Pages 工作流只发布 `frontend/` 的 vinext 静态导出。仓库设置中需要将 Pages 的 Source 设为 **GitHub Actions**。
 
 实验计算和 Word/PDF 报告生成仍由 FastAPI 后端完成。后端应部署到独立的 HTTPS 地址，并在仓库的 Actions variable 中设置：
 
@@ -19,7 +19,7 @@ NEXT_PUBLIC_API_URL=https://你的后端域名
 项目提供 `deploy/oracle/` 的同源 Docker Compose 部署方案，适用于 Oracle Cloud Always Free VM：
 
 - `backend` 运行 FastAPI、NumPy、SciPy、Matplotlib 和报告生成依赖；
-- `frontend` 构建 Next.js 静态页面，由 Nginx 提供并反向代理 `/api/`；
+- `frontend` 构建 vinext 静态页面，由 Nginx 提供并反向代理 `/api/`；
 - 两个容器均配置 `restart: unless-stopped`，后端不因空闲进入冷启动；
 - 详细准备、VCN 放行和部署命令见 `deploy/oracle/README.md`。
 
@@ -51,7 +51,7 @@ PhysKiller 2.0 的匿名分析和 OCR 反馈默认写入容器临时目录中的
 仓库根目录的 `cloudbaserc.json` 指定目标环境，`npm run deploy` 把两件事串成一条流水：
 
 - `tcb cloudrun deploy --source backend`：按 `backend/Dockerfile` 在云端构建 FastAPI 容器（端口 8001），服务不存在时自动创建；
-- `tcb hosting deploy frontend/out /`：把 Next.js 静态导出上传到静态托管。
+- `tcb hosting deploy frontend/out /`：把 vinext 静态导出上传到静态托管。
 
 因为前端在构建期把 `NEXT_PUBLIC_API_URL` 编译进产物，脚本顺序固定为「容器 → 解析公网地址 → 构建前端 → 上传」，并把解析到的地址缓存到 `.dev-logs/cloudbase.json`，让 `deploy:frontend` 可以单独重跑。
 
@@ -87,7 +87,12 @@ tcb env list                 # 确认能看到 cloudbaserc.json 里的 envId
 ```bash
 cd frontend
 npm ci
+npm test          # vp test（Vitest）
+npm run check     # Oxlint + 类型检查
+npx tsc --noEmit
 NEXT_PUBLIC_BASE_PATH=/physicslab npm run build
 ```
 
-静态文件会输出到 `frontend/out/`。后端仍按根目录 README 中的 FastAPI 命令单独启动。
+静态文件会输出到 `frontend/out/`（目录式产物：每个路由一个 `index.html` + `404.html`）。后端仍按根目录 README 中的 FastAPI 命令单独启动。
+
+> 在 **Git Bash** 下直接写 `NEXT_PUBLIC_BASE_PATH=/physicslab npm run build` 会被 MSYS 把值改写成 `D:/Program Files/.../physicslab`（绝对路径），构建随即失败。要么用 PowerShell / cmd，要么用 `node -e "process.env.NEXT_PUBLIC_BASE_PATH='/physicslab'; …"` 注入，CI（Linux）不受影响。

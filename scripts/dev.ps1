@@ -199,32 +199,40 @@ if (-not $nodeExe) { throw 'Could not resolve the node executable on PATH.' }
 
 function Invoke-FrontendBuild {
     Write-Host 'Building frontend (npm run build) ...'
-    # A killed build can leave .next/lock behind, which makes next refuse to
-    # start with "Another next build process is already running". Clear it only
-    # when no live next build owns it.
-    $lockFile = Join-Path $frontend '.next\lock'
+    # 两个前端构建并发跑会互相清空 frontend/out（vinext 先写 dist 再落到 out），
+    # 得到一个缺页的产物。锁由脚本自己维护，与构建工具无关：有存活的构建进程就中止，
+    # 没有则判定为上次崩溃/中断留下的残留并清理。
+    $lockFile = Join-Path $frontend '.build.lock'
     if (Test-Path $lockFile) {
         $activeBuild = Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
-            Where-Object { $_.CommandLine -like '*next*' -and $_.CommandLine -like '*build*' }
+            Where-Object {
+                $_.CommandLine -match '(vinext|vite)' -or $_.CommandLine -match 'scripts[\\/]build\.mjs'
+            } |
+            Where-Object { $_.CommandLine -match 'build' }
         if ($activeBuild) {
-            throw 'Another next build is running. Wait for it to finish (or stop it), then retry.'
+            throw 'Another frontend build is running. Wait for it to finish (or stop it), then retry.'
         }
         Remove-Item -Force $lockFile
-        Write-Host 'Removed stale .next/lock left by an interrupted build.'
+        Write-Host 'Removed stale .build.lock left by an interrupted build.'
     }
-    # Clean the export ourselves: next build deletes it through fs.rm, which
-    # bulk-delete guards (IDE shims) can block with a confusing error.
-    if (Test-Path $outDir) { Remove-Item -Recurse -Force $outDir }
-    Push-Location $frontend
+    New-Item -ItemType File -Force -Path $lockFile | Out-Null
     try {
-        & $npmExe run build
-        if ($LASTEXITCODE -ne 0) { throw 'npm run build failed.' }
+        # 构建自己会清 frontend/out。这里先删一遍，是因为 bulk-delete guards（IDE 的
+        # 安全删除钩子）可能拦住构建内部的批量删除并抛一个难懂的错。
+        if (Test-Path $outDir) { Remove-Item -Recurse -Force $outDir }
+        Push-Location $frontend
+        try {
+            & $npmExe run build
+            if ($LASTEXITCODE -ne 0) { throw 'npm run build failed.' }
+        } finally {
+            Pop-Location
+        }
+        $index = Join-Path $outDir 'index.html'
+        if (-not (Test-Path $index)) { throw "Build finished but $index is missing." }
+        Write-Host ("Built: {0}" -f $outDir)
     } finally {
-        Pop-Location
+        Remove-Item -Force $lockFile -ErrorAction SilentlyContinue
     }
-    $index = Join-Path $outDir 'index.html'
-    if (-not (Test-Path $index)) { throw "Build finished but $index is missing." }
-    Write-Host ("Built: {0}" -f $outDir)
 }
 
 # --- dependencies ------------------------------------------------------------

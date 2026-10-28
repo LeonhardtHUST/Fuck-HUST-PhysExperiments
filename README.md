@@ -119,7 +119,7 @@ for HUST Physics Experiments
 ```
 User
  │
-PhysLab（Next.js 界面 + FastAPI 服务）
+PhysLab（vinext / Vite 界面 + FastAPI 服务）
  │
 Experiment Processing（计算 · 误差分析 · 拟合绘图 · 报告）
  │
@@ -139,7 +139,7 @@ PhysLab 负责采集与切分，[PhysLab_OCR](https://github.com/Bogger111/PhysL
 - 支持 12 个大学物理实验的录入、计算、绘图与报告
 - 支持实验记录表 OCR 辅助录入（候选值须人工确认）
 - 支持匿名化数据收集闭环：自愿同意 → 采集 → 确认 → 切分 → 训练集导出
-- 后端 581 项、前端 93 项自动测试全部通过（后端另有 3 项跳过：缺 `.env.local` 与未暴露公式的实验）
+- 后端 581 项、前端 100 项自动测试全部通过（后端另有 3 项跳过：缺 `.env.local` 与未暴露公式的实验）
 
 **未来**
 
@@ -157,8 +157,8 @@ PhysLab 负责采集与切分，[PhysLab_OCR](https://github.com/Bogger111/PhysL
 
 | 命令 | 作用 |
 |---|---|
-| `npm run dev` | 开发模式：后端 `uvicorn --reload` + 前端 `next dev`，改代码即时生效 |
-| `npm run build` | 只构建前端（`next build` 静态导出到 `frontend/out`） |
+| `npm run dev` | 开发模式：后端 `uvicorn --reload` + 前端 `vinext dev`（Vite），改代码即时生效 |
+| `npm run build` | 只构建前端（`vinext build` 静态导出到 `frontend/out`） |
 | `npm run prod` | 先构建，再以**生产产物**启动（后端不带 `--reload` + 静态服务器），页面不再实时渲染，明显更流畅 |
 | `npm run stop` | 停掉占用 8001 / 3000 的进程 |
 | `npm run mcp` | 前台启动本地 MCP Server（stdio，供 AI 客户端接入；不监听端口，见下） |
@@ -196,8 +196,8 @@ npm run prod -- --no-browser --detach     # 构建 + 后台生产模式，不弹
 
 脚本做的事：首次运行创建 `.venv` 并安装 `backend/requirements.txt`、`frontend/` 执行 `npm ci`；清理端口后启动后端与前端，轮询 `/health` 和首页直到就绪（各 180 秒上限），失败会提示看日志。
 
-- 开发模式：前端 <http://localhost:3000>（`next dev`，热更新）；生产模式：同一个地址，服务的是 `frontend/out` 静态产物，适合演示与验收。
-- 后端始终是 <http://127.0.0.1:8001>（API 文档 `/docs`）；前端通过 `next.config.ts` 的 rewrite 把 `/api/*` 代理过去，两种模式一致。
+- 开发模式：前端 <http://localhost:3000>（`vinext dev`，热更新；**只监听 `localhost` / IPv6 `::1`**，用 `127.0.0.1` 连不上）；生产模式：同一个地址，服务的是 `frontend/out` 静态产物，适合演示与验收。
+- 后端始终是 <http://127.0.0.1:8001>（API 文档 `/docs`）；前端在构建期把 `NEXT_PUBLIC_API_URL` 内联进产物（默认 `http://localhost:8001`），Oracle 部署下该变量为空、由 nginx 反代同源 `/api/`。
 - `npm run prod` 每次都会重新构建；只想看页面就反复用同一个 `prod` 命令即可（构建约 20 秒）。
 - 前台模式按 `Ctrl+C` 停止；后台模式用 `-Stop` / `--stop`，日志见 `.dev-logs/`（已被 `.gitignore` 覆盖）。
 - PowerShell 报「禁止运行脚本」时：`powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1`。
@@ -219,9 +219,19 @@ npm run prod -- --no-browser --detach     # 构建 + 后台生产模式，不弹
 
 `npm run dev / build / prod / stop` 只负责参数转发，脚本本身可直接调用，例如 `.\scripts\dev.ps1 -Prod -Detach -NoBrowser` 或 `./scripts/dev.sh --prod --detach --no-browser`。`deploy` 系列不转发到 `.ps1` / `.sh`，由 `scripts/deploy.mjs` 直接执行部署流水（`node scripts/deploy.mjs --help` 看参数）。
 
-### 用 Vite+（`vp` / `vpr`）运行
+### 前端工具链：Vite+（`vp`）
 
-装了 [Vite+](https://viteplus.dev/guide/) 的话，可以用 `vp run <task>` 跑本仓库的 npm 脚本；`vpr` 是它的简写（等价于 `vp run`），不装 npm 也能用：
+前端已迁移到 **vinext（Vite 8 / Rolldown）+ Vite+**。`frontend/` 的 `dev` / `build` / `test` / `check` 全部由 Vite+ 提供，配置集中在 `frontend/vite.config.ts`：
+
+| 命令（在 `frontend/` 下） | 作用 |
+|---|---|
+| `npm run dev` | `vinext dev`，Vite 开发服务器（端口 3000） |
+| `npm run build` | 静态导出到 `frontend/out`（内部先跑 `vinext build`，`basePath` 非空时再由 `scripts/build.mjs` 拆平目录） |
+| `npm test` | `vp test`（Vitest 5），15 个文件 / 100 个用例 |
+| `npm run check` | `vp check --no-fmt`：Oxlint + 类型检查（格式检查暂未纳入准入） |
+| `npx vp build` | 等价于 `npm run build`，但**不经过** `scripts/build.mjs`，只适合 `NEXT_PUBLIC_BASE_PATH` 为空的本地校验 |
+
+仓库根目录的 npm 脚本仍可用 Vite+ 的任务运行器跑，`vpr` 是 `vp run` 的简写：
 
 | npm | Vite+ |
 |---|---|
@@ -235,8 +245,8 @@ npm run prod -- --no-browser --detach     # 构建 + 后台生产模式，不弹
 
 - **附加参数不要写 `--`**：npm 会吞掉 `--`，`vpr` 则把它原样传给脚本（`vpr prod -- --no-browser` 会被 `dev.mjs` 当成未知参数拒绝）。Vite+ 用户请直接写 `vpr prod --no-browser`、`vpr dev --no-browser`。
 - 只写 `vpr run <task>` 会报 `Task "run" not found`：`vpr` 本身已经是 `vp run`，长写法用 `vp run <task>`。
-- 输出里的 `warn: This project does not use vite-plus` 和 `cache disabled` 属正常：本仓库只借 `vpr` 当任务运行器，没有迁移到 Vite+ 工具链，命令最终仍走 `scripts/dev.mjs`，行为与 npm 一致。
 - 尽量用长参数（`--no-browser` 而不是 `-d`）：`vp run` 自己会解析 `-r` / `-F` / `-v` 等短选项。
+- 需要 Node `>=22.18`（`vinext` engines `>=22`、`vite-plus` engines `^22.18 || ^24.11 || >=26`）。
 
 ### 手动启动
 

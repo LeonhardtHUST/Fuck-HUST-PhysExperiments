@@ -234,9 +234,9 @@ ensure_node() {
     return 0
 }
 
-# next build removes frontend/out through fs.rm, which bulk-delete guards
-# (IDE shims on Windows) can block with a confusing error. Removing the export
-# ourselves keeps the build independent of those guards.
+# 构建自己会清 frontend/out。这里先删一遍，是因为 bulk-delete guards（Windows 上的
+# IDE 安全删除钩子）可能拦住构建内部的批量删除并抛一个难懂的错；提前清掉可以让
+# 构建只做写盘。
 remove_dir() {
     local dir="$1"
     [[ -d "$dir" ]] || return 0
@@ -254,19 +254,22 @@ remove_dir() {
 
 build_frontend() {
     echo "Building frontend (npm run build) ..."
-    # A killed build can leave .next/lock behind, which makes next refuse to
-    # start with "Another next build process is already running". Clear it only
-    # when no live next build owns it.
-    local lock_file="$FRONTEND_DIR/.next/lock"
+    # 两个前端构建并发跑会互相清空 frontend/out（vinext 先写 dist 再落到 out），
+    # 得到一个缺页的产物。锁由脚本自己维护，与构建工具无关：有存活的构建进程就中止，
+    # 没有则判定为上次崩溃/中断留下的残留并清理。
+    local lock_file="$FRONTEND_DIR/.build.lock"
     if [[ -e "$lock_file" ]]; then
-        if command -v pgrep >/dev/null 2>&1 && pgrep -f "next.*build" >/dev/null 2>&1; then
-            die "another next build is running; wait for it to finish (or stop it), then retry"
+        if command -v pgrep >/dev/null 2>&1 &&
+            pgrep -f "vinext[[:space:]]+build|vite[[:space:]]+build|scripts/build\.mjs" >/dev/null 2>&1; then
+            die "another frontend build is running; wait for it to finish (or stop it), then retry"
         fi
         rm -f "$lock_file"
-        echo "Removed stale .next/lock left by an interrupted build."
+        echo "Removed stale .build.lock left by an interrupted build."
     fi
+    : > "$lock_file"
     remove_dir "$OUT_DIR"
-    ( cd "$FRONTEND_DIR" && npm run build ) || die "npm run build failed."
+    ( cd "$FRONTEND_DIR" && npm run build ) || { rm -f "$lock_file"; die "npm run build failed."; }
+    rm -f "$lock_file"
     [[ -f "$OUT_DIR/index.html" ]] ||
         die "build finished but $OUT_DIR/index.html is missing."
     echo "Built: $OUT_DIR"

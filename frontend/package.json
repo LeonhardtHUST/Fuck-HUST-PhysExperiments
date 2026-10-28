@@ -8,7 +8,7 @@
     "build": "node scripts/build.mjs",
     "start": "vinext start",
     "preview": "vinext start",
-    "check": "vp check",
+    "check": "vp check --no-fmt",
     "lint": "vp lint",
     "fmt": "vp fmt",
     "test": "vp test"
