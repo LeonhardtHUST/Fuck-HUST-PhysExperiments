@@ -134,15 +134,7 @@ export default function HomePage() {
               href="/experiments"
               className="group inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-8 text-[15px] font-semibold text-white shadow-lg shadow-indigo-600/30 transition-all hover:-translate-y-0.5 hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/35 sm:w-auto"
             >
-              普通实验 · 选择实验，开始处理
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </Link>
-            <Link
-              href="/experiments?mode=collection"
-              className="group inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-white/90 px-7 text-[15px] font-semibold text-indigo-700 shadow-sm backdrop-blur transition-all hover:-translate-y-0.5 hover:border-indigo-300 hover:bg-white sm:w-auto"
-            >
-              <Sparkles className="h-4 w-4" />
-              AI 实验共建
+              选择实验，开始处理
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
             <a
@@ -155,8 +147,9 @@ export default function HomePage() {
           </div>
 
           <p className="mx-auto mt-5 max-w-2xl text-xs leading-6 text-stone-500">
-            两种模式进入同一个实验工作台：<span className="font-semibold text-stone-700">普通实验</span>不保存任何上传内容；
-            <span className="font-semibold text-indigo-700">AI 实验共建</span>在实验完成后额外保存脱敏记录表与确认数据，用于改进数据识别能力，可随时撤回。
+            默认不保存任何上传内容。生成报告前可选择
+            <span className="font-semibold text-indigo-700">启用匿名化数据收集</span>
+            ，把已确认的实验数值与自愿附上的记录表用于改进表格识别；不参与同样完整可用，随时可关闭。
           </p>
 
           <div className="mt-9 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs font-medium text-stone-400">
@@ -308,6 +301,7 @@ export default function HomePage() {
           <div className="flex items-center gap-5 text-xs text-stone-400">
             <Link href="/" className="transition-colors hover:text-stone-700">首页</Link>
             <Link href="/experiments" className="transition-colors hover:text-stone-700">实验库</Link>
+            <Link href="/privacy" className="transition-colors hover:text-stone-700">隐私说明</Link>
             <span>© 2026 华中科技大学</span>
           </div>
         </div>

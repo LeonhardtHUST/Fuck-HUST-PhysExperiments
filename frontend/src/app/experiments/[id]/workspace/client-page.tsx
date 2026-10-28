@@ -52,7 +52,9 @@ import {
 } from "@/lib/artifact-scope";
 import { trimTrailingEmptyRows } from "@/components/workspace/table-rows";
 import { DraftClearMenu, DraftRestoreBanner } from "@/components/workspace/WorkspaceDraftControls";
-import DataContributionPanel from "@/components/workspace/DataContributionPanel";
+import DataCollectionConsentOverlays from "@/components/workspace/DataCollectionConsentOverlays";
+import DataCollectionOptInRow from "@/components/workspace/DataCollectionOptInRow";
+import { useDataCollectionConsent } from "@/hooks/useDataCollectionConsent";
 import SoundLightWorkspace from "@/components/workspace/SoundLightWorkspace";
 import GenericExperimentWorkspace from "@/components/workspace/GenericExperimentWorkspace";
 import { useDataCollection } from "@/hooks/useDataCollection";
@@ -144,6 +146,7 @@ function PolarizationWorkspace({
   const { id } = use(params);
   const experiment = getExperiment(id);
   const collection = useDataCollection("polarization");
+  const gate = useDataCollectionConsent(collection);
   useEffect(() => {
     void trackEvent("workspace_start", id);
   }, [id]);
@@ -238,6 +241,9 @@ function PolarizationWorkspace({
   }, [bgUw, thetaQwp, malusData, hwInit, hwData, qwData, circData]);
 
   const downloadFinalReport = async (format: ReportFormat) => {
+    // One-time consent question before the first report; already answered,
+    // backend disabled or status still loading all pass straight through.
+    if (!(await gate.ensureDecided())) return;
     const data = buildRequest();
     await downloadReport(format, data);
     await collection.commit(data);
@@ -548,6 +554,7 @@ function PolarizationWorkspace({
 
   return (
     <div className="min-h-screen">
+      <DataCollectionConsentOverlays collection={collection} gate={gate} experimentName={experiment.name} />
       {/* ===== Top bar ===== */}
       <div className="border-b border-stone-200/70 bg-white">
         <div className="container-x flex h-14 items-center justify-between gap-3">
@@ -729,8 +736,6 @@ function PolarizationWorkspace({
                 {dlError}
               </p>
             )}
-
-            <DataContributionPanel collection={collection} />
 
             {notes && (
               <ArtifactRemarks
@@ -1234,6 +1239,9 @@ function PolarizationWorkspace({
                       {busyKey === "report-jsonc" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileCode2 className="h-3.5 w-3.5" />}
                       JSONC
                     </button>
+                  </div>
+                  <div className="mt-3">
+                    <DataCollectionOptInRow collection={collection} gate={gate} />
                   </div>
                 </div>
               </div>

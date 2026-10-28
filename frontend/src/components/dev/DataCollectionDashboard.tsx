@@ -72,7 +72,7 @@ export default function DataCollectionDashboard() {
             Data Collection
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-stone-500">
-            数据共建总览。统计只读取 session metadata 与数据集索引（samples.csv），不扫描任何图片。
+            匿名化数据收集总览。统计只读取 session metadata 与数据集索引（samples.csv），不扫描任何图片。
           </p>
         </div>
         <button
@@ -119,7 +119,7 @@ export default function DataCollectionDashboard() {
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
               ["总实验数 Sessions", stats.total_sessions],
-              ["AI 贡献 Contributions", stats.collection_sessions ?? stats.confirmed_sessions],
+              ["参与实验 Contributions", stats.collection_sessions ?? stats.confirmed_sessions],
               ["OCR Samples", stats.samples_created],
               ["待确认数值", stats.sessions_awaiting_values ?? Math.max(0, stats.total_sessions - stats.confirmed_sessions)],
             ].map(([label, value]) => (
@@ -136,8 +136,10 @@ export default function DataCollectionDashboard() {
                 <Database className="h-4 w-4 text-indigo-600" />Experiments
               </h2>
               <p className="text-xs text-stone-500">
-                普通实验 {stats.plain_sessions ?? 0} 个（不采集） · AI 共建{" "}
-                {stats.collection_sessions ?? 0} 个（其中已确认 {stats.collection_confirmed_sessions ?? 0} 个）
+                贡献 {stats.collection_sessions ?? 0} 个（其中已确认{" "}
+                {stats.collection_confirmed_sessions ?? 0} 个）
+                {/* 后端仍按 collection_mode 计数；现在所有上传都来自明确同意，
+                    所以 `plain_sessions` 恒为 0，不再展示。 */}
               </p>
             </div>
             {experiments.length === 0 ? (

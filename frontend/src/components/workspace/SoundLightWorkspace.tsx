@@ -30,7 +30,9 @@ import ArtifactActions, { type OcrTarget } from "@/components/workspace/Artifact
 import { applyOcrValues, editableCellCount } from "@/lib/ocr-apply";
 import ArtifactRemarks from "@/components/workspace/ArtifactRemarks";
 import { trimTrailingEmptyRows } from "@/components/workspace/table-rows";
-import DataContributionPanel from "@/components/workspace/DataContributionPanel";
+import DataCollectionConsentOverlays from "@/components/workspace/DataCollectionConsentOverlays";
+import DataCollectionOptInRow from "@/components/workspace/DataCollectionOptInRow";
+import { useDataCollectionConsent } from "@/hooks/useDataCollectionConsent";
 import { SOUND_LIGHT_LAYOUTS } from "@/lib/soundlight-layouts";
 import { DraftClearMenu, DraftRestoreBanner } from "@/components/workspace/WorkspaceDraftControls";
 import type { ArtifactInput } from "@/lib/experiment-artifact";
@@ -320,6 +322,7 @@ function dataRows(rows: string[][]): string[][] {
 
 export default function SoundLightWorkspace() {
   const collection = useDataCollection(EXP_ID);
+  const gate = useDataCollectionConsent(collection);
   const [step, setStep] = useState<Step>(SOUND_LIGHT_WORKSPACE_STEPS[0]);
   const [method, setMethod] = useState<string>("air_resonance");
   // cell data: key `${method}#${tableIndex}`
@@ -665,6 +668,9 @@ export default function SoundLightWorkspace() {
     format: ReportFormat,
     data: Record<string, { rows: Record<string, (number | null)[]>; params: Record<string, number> }>,
   ) => {
+    // One-time consent question before the first report; already answered,
+    // backend disabled or status still loading all pass straight through.
+    if (!(await gate.ensureDecided())) return;
     await downloadSoundLightReport(format, data);
     await collection.commit(data);
   };
@@ -679,6 +685,7 @@ export default function SoundLightWorkspace() {
 
   return (
     <div className="min-h-screen">
+      <DataCollectionConsentOverlays collection={collection} gate={gate} />
       {/* top bar */}
       <div className="border-b border-stone-200/70 bg-white">
         <div className="container-x flex h-14 items-center justify-between gap-3">
@@ -835,8 +842,6 @@ export default function SoundLightWorkspace() {
               </p>
             )}
 
-            <DataContributionPanel collection={collection} />
-
             {notes && (
               <ArtifactRemarks
                 scope="experiment"
@@ -915,7 +920,8 @@ export default function SoundLightWorkspace() {
                   )}
                 </p>
               </div>
-              <div className="flex shrink-0 flex-wrap justify-end gap-2">
+              <div className="flex shrink-0 flex-col items-end gap-2">
+                <div className="flex flex-wrap justify-end gap-2">
                 <button
                   onClick={() =>
                     runDownload("quick-report-docx", () =>
@@ -966,6 +972,8 @@ export default function SoundLightWorkspace() {
                   {busyKey === "quick-report-jsonc" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileCode2 className="h-3.5 w-3.5" />}
                   完整 · JSONC
                 </button>
+                </div>
+                <DataCollectionOptInRow collection={collection} gate={gate} />
               </div>
             </div>
 

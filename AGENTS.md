@@ -213,6 +213,15 @@ Get-NetTCPConnection -LocalPort 8001,3000 -State Listen -ErrorAction SilentlyCon
 
 另外：`SoundLightWorkspace.tsx` 的 `isMethodFilled` 原本要求每个格子非空，只要 tof 表里有空格子，「完整报告」的请求体就**不含**该方法且不再报错（静默漏方法）。放宽容错计算的方法必须同步放宽这里。
 
+### 19. 数据收集同意只有一个门、一个 key
+
+「匿名化数据收集」现在不再是入口模式，而是报告生成前的一次性询问。改动时守住三条：
+
+- **偏好 key 固定 `physlab:data-collection-consent:v1`，且不得落进 `physlab:draft:v1:` 前缀**——`DraftClearMenu` 按前缀清扫，key 一旦落在里面，用户清草稿会顺手把「已询问」状态删掉，下一次生成报告又弹一次。判定集中在 `frontend/src/lib/data-collection-consent.ts` 的 `shouldPrompt`，`frontend/tests/data-collection-consent.test.ts` 覆盖 `enabled/ready/hydrated` 三种不该弹的情况。
+- **门只在 `downloadFinalReport` 里 `await gate.ensureDecided()`，不要在按钮 `onClick` 上重复实现**。门是 Promise，调用方 await 之后 `act()` / `runDownload()` 的 busy 幂等与错误处理原样生效；写成 `setPending(fn)` 会踩「函数被 React 当成 updater」的坑，并且绕开 busy 后连点会弹两次。
+- **照片入口必须同时存在于报告区那一行**。弹窗只问一次，每次实验的记录表都是新的一张；只把 `<input type=file>` 放弹窗里，第二次实验起就不会有 session，`commit` 静默 early-return，收集链看起来还活着但数据没了。
+- 新增弹窗一律 `createPortal(..., document.body)` + `mounted` 门（静态导出首帧没有 `document`），见第 15 条。
+
 ## 提交习惯
 
 - 提交信息用中文 Conventional Commits，scope 取模块名：`feat(workspace): ...`、`fix(gmr): ...`、`docs(readme): ...`。

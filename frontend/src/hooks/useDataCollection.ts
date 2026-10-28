@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   commitDataCollectionSession,
   createDataCollectionSession,
@@ -11,7 +11,10 @@ import {
 export type ContributionState = "idle" | "uploading" | "pending" | "confirmed" | "error";
 
 export interface DataCollectionController {
+  /** The backend has data collection turned on. */
   enabled: boolean;
+  /** The `/status` probe has answered — the consent gate must wait for this. */
+  statusReady: boolean;
   consent: boolean;
   setConsent: (value: boolean) => void;
   file: File | null;
@@ -27,15 +30,17 @@ export interface DataCollectionController {
   showThanks: boolean;
   dismissThanks: () => void;
   error: string | null;
-  upload: () => Promise<void>;
+  /** `file` defaults to the picker state; pass one explicitly to upload right away. */
+  upload: (file?: File | null) => Promise<void>;
   commit: (data: object) => Promise<void>;
   withdraw: () => Promise<void>;
 }
 
 export function useDataCollection(experimentId: string): DataCollectionController {
   const [enabled, setEnabled] = useState(false);
+  const [statusReady, setStatusReady] = useState(false);
   const [templateVersion, setTemplateVersion] = useState("2.0");
-  const [consent, setConsent] = useState(false);
+  const [consent, setConsentState] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [state, setState] = useState<ContributionState>("idle");
@@ -44,6 +49,12 @@ export function useDataCollection(experimentId: string): DataCollectionControlle
   const [experimentName, setExperimentName] = useState<string | null>(null);
   const [showThanks, setShowThanks] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // `commit` runs right after `await upload(...)`, before React re-renders the
+  // state that was just set. Reading the mirrors keeps the freshly created
+  // session from being silently dropped (the label would never be committed).
+  const consentRef = useRef(false);
+  const sessionRef = useRef<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -55,16 +66,27 @@ export function useDataCollection(experimentId: string): DataCollectionControlle
       })
       .catch(() => {
         if (active) setEnabled(false);
+      })
+      .finally(() => {
+        // A failed probe means "not available", exactly like `enabled: false`.
+        if (active) setStatusReady(true);
       });
     return () => { active = false; };
   }, []);
 
-  const upload = useCallback(async () => {
-    if (!enabled || !consent || !file || sessionId) return;
+  const setConsent = useCallback((value: boolean) => {
+    consentRef.current = value;
+    setConsentState(value);
+  }, []);
+
+  const upload = useCallback(async (override?: File | null) => {
+    const target = override ?? file;
+    if (!enabled || !consentRef.current || !target || sessionRef.current) return;
     setState("uploading");
     setError(null);
     try {
-      const response = await createDataCollectionSession(experimentId, templateVersion, file);
+      const response = await createDataCollectionSession(experimentId, templateVersion, target);
+      sessionRef.current = response.session_id;
       setSessionId(response.session_id);
       setRevision(response.revision);
       setEstimatedSamples(response.estimated_samples ?? null);
@@ -74,13 +96,15 @@ export function useDataCollection(experimentId: string): DataCollectionControlle
       setError(reason instanceof Error ? reason.message : "原始记录表上传失败");
       setState("error");
     }
-  }, [enabled, consent, file, sessionId, experimentId, templateVersion]);
+  }, [enabled, file, experimentId, templateVersion]);
 
   const commit = useCallback(async (data: object) => {
-    if (!enabled || !consent || !sessionId) return;
+    if (!enabled || !consentRef.current) return;
+    const sid = sessionRef.current;
+    if (!sid) return;
     try {
       const response = await commitDataCollectionSession(
-        sessionId,
+        sid,
         experimentId,
         templateVersion,
         data,
@@ -99,31 +123,35 @@ export function useDataCollection(experimentId: string): DataCollectionControlle
       setError(reason instanceof Error ? reason.message : "确认数据未保存");
       setState("error");
     }
-  }, [enabled, consent, sessionId, experimentId, templateVersion]);
+  }, [enabled, experimentId, templateVersion]);
 
   const withdraw = useCallback(async () => {
-    if (sessionId) {
+    const sid = sessionRef.current;
+    if (sid) {
       try {
-        await deleteDataCollectionSession(sessionId);
+        await deleteDataCollectionSession(sid);
       } catch (reason) {
         setError(reason instanceof Error ? reason.message : "撤回失败");
         return;
       }
     }
+    sessionRef.current = null;
+    consentRef.current = false;
     setSessionId(null);
-    setConsent(false);
+    setConsentState(false);
     setFile(null);
     setRevision(0);
     setEstimatedSamples(null);
     setShowThanks(false);
     setState("idle");
     setError(null);
-  }, [sessionId]);
+  }, []);
 
   const dismissThanks = useCallback(() => setShowThanks(false), []);
 
   return {
     enabled,
+    statusReady,
     consent,
     setConsent,
     file,

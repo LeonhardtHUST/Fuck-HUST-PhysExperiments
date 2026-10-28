@@ -20,9 +20,6 @@ import {
 } from "lucide-react";
 import { getExperiment } from "@/lib/experiments";
 import DataReferenceCard from "@/components/DataReferenceCard";
-import CoBuildIntroCard from "@/components/workspace/CoBuildIntroCard";
-import { withCollectionMode } from "@/lib/collection-mode";
-import { useCollectionMode } from "@/hooks/useCollectionMode";
 import { downloadRecordSheet, previewRecordSheet, trackEvent } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -48,7 +45,6 @@ export default function ExperimentDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const collectionMode = useCollectionMode();
   const experiment = getExperiment(id);
   useEffect(() => {
     void trackEvent("experiment_open", id);
@@ -142,7 +138,7 @@ export default function ExperimentDetailPage({
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
-                href={withCollectionMode(`/experiments/${experiment.id}/workspace`, collectionMode)}
+                href={`/experiments/${experiment.id}/workspace`}
                 className="group inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-7 text-[15px] font-semibold text-white shadow-lg shadow-indigo-600/25 transition-all hover:-translate-y-0.5 hover:bg-indigo-700 hover:shadow-xl"
               >
                 开始数据处理
@@ -234,12 +230,6 @@ export default function ExperimentDetailPage({
 
         {/* Record sheet download */}
         <section>
-          {collectionMode && (
-          <section className="mb-12">
-            <CoBuildIntroCard experimentId={experiment.id} experimentName={experiment.name} />
-          </section>
-        )}
-
         <SectionHead kicker="Record Sheet" title="实验数据记录表" />
           <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50/90 via-white to-violet-50/80 p-6 sm:p-7">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
@@ -370,7 +360,7 @@ export default function ExperimentDetailPage({
               录入原始读数即可，计算、拟合、绘图与结果表将自动生成。
             </p>
             <Link
-              href={withCollectionMode(`/experiments/${experiment.id}/workspace`, collectionMode)}
+              href={`/experiments/${experiment.id}/workspace`}
               className="group mt-8 inline-flex h-12 items-center gap-2 rounded-xl bg-white px-8 text-[15px] font-bold text-indigo-950 shadow-xl shadow-black/20 transition-all hover:-translate-y-0.5 hover:shadow-2xl"
             >
               进入数据处理工作台
