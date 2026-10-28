@@ -88,6 +88,13 @@ test("sound-light exposes the eight OCR table ids", () => {
     assert.ok(table.minRows >= 1 && table.minRows <= table.defaultRows);
   }
   assert.equal(spec.backendResults.some((result) => result.key === "v_exp"), true);
+  // 时差法：拟合声速是主结果，v_mean/v_std 保留为诊断量（旧 artifact 的 tof.v_mean 仍须拦截导入）
+  const tofKeys = spec.backendResults
+    .filter((result) => result.methodId === "tof")
+    .map((result) => result.key);
+  assert.equal(tofKeys[0], "v_fit", "时差法主结果应为拟合声速");
+  assert.ok(tofKeys.includes("v_mean"));
+  assert.ok(tofKeys.includes("excluded_points"));
 });
 
 test("polarization declares the four workspace tables and derived angle columns", () => {

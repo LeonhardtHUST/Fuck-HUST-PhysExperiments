@@ -296,6 +296,12 @@ function DataEcho({
           </tbody>
         </table>
       </div>
+      {methodId === "tof" && (
+        <p className="mt-2 text-xs leading-relaxed text-stone-400">
+          负值飞行时间由后端按 16 位计数器（模 65536）回绕解码后参与拟合，此表始终显示原始录入值；
+          空白行会被剔除并在结果页给出提示。
+        </p>
+      )}
     </div>
   );
 }
@@ -580,17 +586,21 @@ export default function SoundLightWorkspace() {
   );
 
   // 数据是否已填满（无需预先逐方法计算，报告生成时后端会内部重算）
-  // 行数达到最小值即视为行数合法，多余的空行在提交前会被裁掉
+  // 行数达到最小值即视为行数合法，多余的空行在提交前会被裁掉。
+  // 时差法是例外：后端允许局部坏点（解码/剔除后返回 warnings），
+  // 因此只要「完整行」达到计算下限即可提交，别因个别空格把整份报告漏掉该方法。
   const isMethodFilled = (mId: string): boolean => {
     const mspec = METHODS.find((m) => m.id === mId);
     if (!mspec) return false;
+    const lenient = mId === "tof";
+    const isCompleteRow = (table: (typeof mspec.tables)[number], row: string[]) =>
+      table.cols.every((col, ci) => !col.key || col.readOnly || (row[ci] ?? "").trim() !== "");
     return mspec.tables.every((table, ti) => {
       const rows = dataRows(getRows(mId, ti));
-      if (rows.length < (table.minRows ?? 1)) return false;
-      return table.cols.every((col, ci) => {
-        if (!col.key || col.readOnly) return true;
-        return rows.every((r) => (r[ci] ?? "").trim() !== "");
-      });
+      const minRows = table.minRows ?? 1;
+      if (rows.length < minRows) return false;
+      if (lenient) return rows.filter((r) => isCompleteRow(table, r)).length >= minRows;
+      return rows.every((r) => isCompleteRow(table, r));
     });
   };
   const filledAllReportData = () => {
@@ -1110,6 +1120,25 @@ export default function SoundLightWorkspace() {
           <div className="mx-auto max-w-4xl animate-rise-in">
             {cur ? (
               <>
+                {(cur.warnings?.length ?? 0) > 0 && (
+                  <div
+                    role="status"
+                    className="mb-5 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-800"
+                  >
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold">数据修复提示（共 {cur.warnings?.length} 条）</p>
+                      <ul className="mt-1 max-h-40 space-y-1 overflow-y-auto text-[13px]">
+                        {cur.warnings?.map((warning) => (
+                          <li key={warning} className="break-words">{warning}</li>
+                        ))}
+                      </ul>
+                      <p className="mt-1.5 text-[12px] text-amber-700/80">
+                        被剔除的行不参与计算，原始录入值仍保留在输入表中；下载的报告会逐条注明。
+                      </p>
+                    </div>
+                  </div>
+                )}
                 <div className="mb-6 flex flex-col items-start justify-between gap-4 rounded-2xl border border-emerald-200/70 bg-gradient-to-r from-emerald-50 via-white to-emerald-50/50 p-6 sm:flex-row sm:items-center">
                   <div className="flex items-center gap-4">
                     <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/30">

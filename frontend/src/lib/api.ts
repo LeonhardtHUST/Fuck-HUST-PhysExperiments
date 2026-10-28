@@ -379,6 +379,8 @@ export interface SoundLightProcessResponse {
   results: SoundLightResultField[];
   plots: Record<string, string>;
   errors?: string[];
+  /** 计算成功但做过数据修复/剔除时的逐行说明（如时差法回绕恢复、坏点剔除）。 */
+  warnings?: string[];
   method?: string;
   method_name?: string;
   error?: string;
