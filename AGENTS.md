@@ -262,6 +262,7 @@ vinext 只给「**已经存在**于 `process.env` 的 `NEXT_PUBLIC_*`」生成 d
 
 - 路径：`file:///C:/Users/Leon/AppData/Local/npm-cache/_npx/<hash>/node_modules/playwright/index.mjs`（`ls ~/AppData/Local/npm-cache/_npx/*/node_modules/playwright` 认领）。
 - 缓存里的 playwright 版本与已装浏览器版本常常对不上（`Executable doesn't exist at ...chromium_headless_shell-1247`），直接用 `chromium.launch({ channel: "chrome" })` 走系统 Chrome，别去 `npx playwright install`。
+- **`chrome --headless --screenshot` / `msedge --dump-dom` 在代理会话里可能静默失败**（连 `--version` 都没有输出）。此时连本机已开的 Edge 更稳：找 `--remote-debugging-port`（本机常用 `9333`），`curl http://127.0.0.1:9333/json/version` 确认后 `chromium.connectOverCDP("http://127.0.0.1:9333")`，**只 `context.newPage()` 开新标签页、用完 `page.close()`**，别碰用户已有标签页。
 - 临时脚本放 `.dev-logs/`（已忽略），收尾连同截图一起删。
 
 ## 提交习惯
