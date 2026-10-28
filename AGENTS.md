@@ -25,7 +25,8 @@ README 只覆盖启动与构建，下面的检查需自己执行：
 | 范围 | 命令 |
 | --- | --- |
 | 前端类型 | `cd frontend && npx tsc --noEmit` |
-| 前端单测 | `cd frontend && npm test`（`node --test` + TS type stripping） |
+| 前端单测 | `cd frontend && npm test`（= `vp test`，Vitest 5；15 文件 / 100 用例） |
+| 前端 lint + 类型 | `cd frontend && npm run check`（= `vp check --no-fmt`；格式检查未纳入准入） |
 | 后端 | `cd backend && python -m pytest -q`（约 570 项；定位用 `-k` / `-m fast`） |
 | 静态构建 | refer to `README.md`「一键脚本」（`npm run build`，产物 `frontend/out`） |
 | 生产模式产物 | 启动方式 refer to `README.md`；起来后逐项请求 `/`、一个深链（`/experiments/<slug>/workspace/`）、`/_next/static/**` 的 css 与 js、一个不存在的路径（须 404）、`HEAD /`、`/health` |
@@ -101,17 +102,17 @@ python -m ocr_dataset.templates --check                        # 必须通过
 
 仓库统一用 LF。Python `Path.write_text` 在 Windows 上默认写 CRLF，重新生成模板后整份文件都会显示为改动。提交前看 `git diff --stat`：若增删行数恰好等于文件行数，就是换行问题，归一为 LF 再提交。
 
-### 3. `next build` 可能卡在清理阶段
+### 3. `vinext build` 首次构建慢，别在前台干等
 
-残留的 `.next` 缓存加上清理子进程被外部（如 IDE 的安全删除钩子）拖住时，构建会长时间无输出。不要在前台干等：
+构建分两步：Vite 8 / Rolldown 打包（约 1–2 秒）→ 起临时生产服务预渲染全部路由（约 10 秒）。首次还要做依赖优化，比稳态慢，但已远快于 Next 时代的 8 分钟。仍然不要在前台干等：
 
 - 用后台进程把 stdout/stderr 重定向到日志文件，轮询日志与 `Test-Path frontend/out`；
-- 确认卡住的是 next 的清理阶段后，停掉进程、移走 `.next` 再重跑；
-- 构建残留（`.next`、`out`、日志）不要进入提交。
+- 构建残留（`dist/`、`.vinext/`、`out`、日志）不要进入提交；
+- `dist/server` 是预渲染要用的服务端包，不是产物；上线只认 `frontend/out`。
 
-### 4. `next dev` 会改写 tracked 的 `next-env.d.ts`
+### 4. `vinext` 每次 build/dev 都会重写 `next-env.d.ts`
 
-`frontend/next-env.d.ts` 是受版本控制的文件，`next dev` 会重写它。跑完 dev 后用 `git checkout -- frontend/next-env.d.ts` 还原，别把它混进功能提交。
+`frontend/next-env.d.ts` 已改为**不跟踪**（见 `.gitignore`）：vinext 每次都会重写它，并引用并不存在的 `./.next/types/routes.d.ts`。类型入口是 `frontend/src/vinext-env.d.ts`（`import "vinext/types"`），`tsc` 的 `include` 也不含 `next-env.d.ts`——不要把两者混在一起。
 
 ### 5. 失败先对照干净 HEAD
 
@@ -130,18 +131,19 @@ python -m ocr_dataset.templates --check                        # 必须通过
 - 停完必须复查：`listeners=0`（`Get-NetTCPConnection -LocalPort 8001,3000 -State Listen`），且没有残留 `dev.mjs` / `dev.ps1` / `uvicorn` / `serve-static` 进程；
 - 按端口停不掉父进程时整棵树杀：`taskkill /PID <pid> /T /F`（Windows）、`pkill -P <pid>`（bash）。只杀监听进程会留下 `npm`/`dev.mjs` 空壳。
 
-### 8. 构建必须串行，锁文件删了也没用
+### 8. 构建必须串行，锁由脚本自己维护
 
-`next build` 用 `frontend/.next/lock` 做**操作系统级独占锁**（不是“文件存在即占用”）。并发两个构建会互相删 `out`、重写 `.next`，症状：`Another next build process is already running`、静态站点整片 404、构建时间从 ~1 分钟涨到十几分钟。
+vinext 落 `out` 的方式是「先写 `dist/` 再落静态文件」，两个构建并发会互相清空 `frontend/out`，得到缺页的产物（症状：部分深链 404、`out` 里只剩几个目录）。
 
+- 锁文件是 `frontend/.build.lock`（`scripts/dev.ps1` / `dev.sh` 创建与清理），与构建工具无关；Next 时代的 `.next/lock` 已不存在，别再照旧去删它；
 - 同一时刻只允许一个构建，别“边等边再发一条”；
-- 报上述错误时先确认没有残留进程：
-  `Get-CimInstance Win32_Process -Filter "Name='node.exe'" | ? { $_.CommandLine -match 'next' }`，`taskkill /PID <pid> /T /F` 后锁由操作系统释放，**删锁文件无效**；
-- 被强杀后 `frontend/out` 可能是空的或缺失，属正常，重跑一次构建即可，不要手工拼产物。
+- 发现残留锁时先确认没有存活构建：
+  `Get-CimInstance Win32_Process -Filter "Name='node.exe'" | ? { $_.CommandLine -match '(vinext|vite).*build' }`，再 `taskkill /PID <pid> /T /F`；
+- 被强杀后 `frontend/out` 可能为空或缺失，属正常，重跑一次构建即可，不要手工拼产物。
 
 ### 9. 构建脚本自己清理导出目录
 
-`next build` 用 `fs.rm` 删 `frontend/out`，在 Windows 上会被 IDE 的安全删除钩子拦掉并报 ENOENT。清理已由 `scripts/dev.ps1` / `scripts/dev.sh` 负责（实现细节见脚本内注释，用法 refer to `README.md`）：**不要在半路手动删 `.next` / `out` 后中断构建**，那只会制造“锁被占”和 404 的假象。
+构建内部会清 `frontend/out`，在 Windows 上可能被 IDE 的安全删除钩子拦掉并报 ENOENT。清理已由 `scripts/dev.ps1` / `scripts/dev.sh` 负责（实现细节见脚本内注释，用法 refer to `README.md`）：**不要在半路手动删 `dist` / `.vinext` / `out` 后中断构建**。
 
 ### 10. MCP stdio 自测：stdout 只有协议帧，收尾别靠官方客户端
 
@@ -226,15 +228,35 @@ Get-NetTCPConnection -LocalPort 8001,3000 -State Listen -ErrorAction SilentlyCon
 - **面板不允许「后端没开就整个消失」**：`/api/data-collection/status` 返回 `enabled:false`（本地没建 `backend/.env.local` 时的默认值）时，旧的常量行直接 `return null`，于是「导出报告时看不到匿名分享」这件事无法自查。panel 变体必须落在「当前部署未开放 + 一句原因」的可读状态上，开关置灰、隐藏「设置」入口。
 - 新增弹窗一律 `createPortal(..., document.body)` + `mounted` 门（静态导出首帧没有 `document`），见第 15 条。
 
-### 20. 用 `127.0.0.1` 打开 `next dev` 会拿到「能看不能点」的页面
+### 20. dev 服务器只监听 `localhost`（IPv6），`127.0.0.1` 连不上
 
-截图 / 量测脚本里写 `http://127.0.0.1:3000` 时，页面 HTML 正常渲染，但所有按钮点了都没反应，弹窗一个都不开，页面上也没有任何报错——看起来像「导出按钮坏了」。
+`vinext dev` 起在 `http://localhost:3000/`，实际绑定 `::1`。用 `http://127.0.0.1:3000` 请求会直接 `Connection refused`（不是 Next 时代那种「能看不能点」）。
 
-- 病因：Next 16 dev 默认拦截跨源 dev 资源，`frontend.err.log` 里只有一行 `⚠ Blocked cross-origin request to Next.js dev resource /_next/hmr from "127.0.0.1"`。`/_next` 的 chunk 也一起被拦，客户端永不 hydration。
-- 自查顺序：先看 `page.on("pageerror")` 有没有报错（没有多半就是没 hydrate），再点一个有状态的元素（方法页签的 `aria-selected` 会不会变）；不变即未 hydration。
-- 处置：脚本一律用 `http://localhost:3000`。真要放开就在 `next.config.ts` 加 `allowedDevOrigins: ["127.0.0.1"]` 并重启，别靠改脚本猜。
+- 截图 / 量测 / curl 一律用 `http://localhost:3000`；
+- 若一定要走 IPv4，加 `--host 127.0.0.1` 启动。
 
-### 21. Playwright 只能从 npx 缓存绝对路径导入
+### 21. `NEXT_PUBLIC_*` 必须自己在 `vite.config.ts` 里 `define`
+
+vinext 只给「**已经存在**于 `process.env` 的 `NEXT_PUBLIC_*`」生成 define 条目。变量未设置时不会兜底，浏览器端会残留裸 `process.env.NEXT_PUBLIC_API_URL`，模块顶层直接 `ReferenceError`——整站白屏，但构建照样成功。
+
+- `frontend/vite.config.ts` 的 `publicEnv()` 负责补：未设置时定义成字面量 `undefined`，从而保住 `src/lib/api.ts` 的 `??`（空串 = 同源）语义；
+- 新增 `NEXT_PUBLIC_*` 变量时，必须同时加进 `define`，否则本地不设就会白屏、CI 设了却看不出问题。
+
+### 22. Git Bash 会把 `/repo` 这类环境变量值改写成 Windows 绝对路径
+
+`NEXT_PUBLIC_BASE_PATH=/Fuck-HUST-PhysExperiments npm run build` 在 Git Bash 里传进 Node 的值会变成 `D:/Program Files/.../Fuck-HUST-PhysExperiments`，于是 vinext 把这个绝对路径当成 `assetPrefix`，构建直接报 `Invalid pattern ... patterns can be neither absolute nor relative paths`。
+
+- 本地验 basePath 用 PowerShell，或 `node -e "process.env.NEXT_PUBLIC_BASE_PATH='/repo'; require('child_process').spawnSync('npm',['run','build'],{stdio:'inherit',env:process.env})"`；
+- CI（Ubuntu）不受影响，别拿本地这个报错去怀疑 `deploy-pages.yml`。
+
+### 23. `basePath` 非空时 vinext 会把产物嵌一层 `out/<basePath>/`
+
+静态导出在 `basePath` 非空时沿用 Next 的 assetPrefix 语义，把整棵产物写进 `out/<basePath>/`（`404.html` 仍留在 `out/` 根）。直接上传 `frontend/out` 到 GitHub Pages 会得到 `/<repo>/<repo>/...`。
+
+- `frontend/scripts/build.mjs` 负责在构建后把嵌套层拆平，磁盘布局恒为 `out/_next/**`，HTML 里的 URL 仍带 `/<repo>/` 前缀；
+- 因此 **`npm run build` 是唯一正确的发布入口**；`npx vp build` 不经过这层包装，只适合 `NEXT_PUBLIC_BASE_PATH` 为空的本地校验。
+
+### 24. Playwright 只能从 npx 缓存绝对路径导入
 
 仓库没有 `playwright` 依赖，`npm root -g` 里也没有；`npx playwright --version` 能跑是因为它在 npx 缓存里。临时脚本用 `import ... from "playwright"` 会 `ERR_MODULE_NOT_FOUND`（`NODE_PATH` 对 ESM 无效）。
 
@@ -245,5 +267,5 @@ Get-NetTCPConnection -LocalPort 8001,3000 -State Listen -ErrorAction SilentlyCon
 ## 提交习惯
 
 - 提交信息用中文 Conventional Commits，scope 取模块名：`feat(workspace): ...`、`fix(gmr): ...`、`docs(readme): ...`。
-- 提交前 `git status` 自查：不提交 `.next`、`.next.bak`、`out`、`frontend/.next/lock`、构建日志、临时脚本（`scripts/_tmp_*`、`backend/_tmp_*.py`）。
+- 提交前 `git status` 自查：不提交 `dist`、`.vinext`、`out`、`frontend/.build.lock`、`frontend/next-env.d.ts`、构建日志、临时脚本（`scripts/_tmp_*`、`backend/_tmp_*.py`）。
 - 一次提交聚焦一个主题；跨端改动（config + 前端 spec + 测试）放同一次提交，保证任一提交点都可构建。

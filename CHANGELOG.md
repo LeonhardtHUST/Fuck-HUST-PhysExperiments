@@ -4,6 +4,13 @@ PhysLab 的版本记录。格式参考 [Keep a Changelog](https://keepachangelog
 
 ## Unreleased
 
+### Changed
+
+- **前端框架从 Next.js 换成 vinext（Vite 8 / Rolldown）**：应用代码零改动（`app/` 目录、`next/link`、`metadata`、`generateStaticParams`、`output: "export"` 全部保留），构建从冷启动约 8 分钟降到 10 秒级。静态产物契约不变：仍是 `frontend/out` + 每路由 `index.html` + `trailingSlash` + 真 `404.html` + `_next/static/**` 的 immutable 缓存，四条托管通道（本地 `serve-static`、GitHub Pages、Oracle nginx、CloudBase）无需改配置
+- **前端工具链迁到 Vite+**：`npm test` 改为 `vp test`（Vitest 5，15 文件 / 100 用例），新增 `npm run check`（`vp check --no-fmt`，Oxlint + 类型检查）；15 个单测只把 `node:test` 的 import 换成 `vite-plus/test`，断言仍是 `node:assert`
+- **Node 基线抬到 22.18**：`vinext` 要求 Node >= 22，`vite-plus` 要求 `^22.18 || ^24.11 || >=26`；CI 与 Oracle 前端镜像同步换成 Node 22
+- `NEXT_PUBLIC_*` 仍按原名在构建期内联（外部契约不变），改由 `frontend/vite.config.ts` 的 `define` 实现，未设置的变量显式定义成 `undefined` 以保住 `api.ts` 的 `??`（空串 = 同源）
+
 ### Added
 
 - **AI Prompt 双版本**：导入弹窗的「AI Prompt」页签可切换「记录纸照片 / 电子数据」。照片版沿用原来的取数约束（只依据图片、看不清留 null、按纸面分辨率保留）；电子版针对仪器导出文件、CSV / Excel 与直接贴出的数据表，改为强调列名映射、单位换算、占位符（`--` / `NaN`）转 null、行数按实际条数输出、精度不按记录表分辨率取整
