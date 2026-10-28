@@ -463,7 +463,12 @@ def enrich_polarization_config(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def enrich_soundlight_config(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Normalize the legacy method-array schema without changing its shape."""
+    """Normalize the legacy method-array schema without changing its shape.
+
+    `minRows` 取各列 min_rows 的最小值。此前缺这个键，`validate_payload` 里
+    `method.get("minRows") or 1` 会让 /validate 的行数下限恒为 1，与 config.json
+    声明的计算下限（tof 3 行、air/water 4 行、light_* 2 行）脱节。
+    """
     result = copy.deepcopy(items)
     for method in result:
         method["schemaVersion"] = "2.0"
@@ -472,5 +477,7 @@ def enrich_soundlight_config(items: list[dict[str, Any]]) -> list[dict[str, Any]
             _field_dict("sound-light", method["id"], field, required=True)
             for field in method.get("table_cols", [])
         ]
+        min_rows = [int(field.get("min_rows", 1)) for field in method.get("table_cols", [])]
+        method["minRows"] = max(1, min(min_rows)) if min_rows else 1
         method["validation"] = {"expectedRangeIsWarning": True, "finiteNumbers": True}
     return result

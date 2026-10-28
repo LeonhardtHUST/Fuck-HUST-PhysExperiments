@@ -23,6 +23,12 @@ class SoundLightExperiment:
     config = CONFIG
 
     def validate(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """录入口径的严格校验（/validate）。
+
+        与 /process 的口径不同：这里按 `fields` 的 required 逐格检查，空格子会报错；
+        /process 对时差法允许局部坏点（解码后剔除并给出 warnings）。两者差异是有意的
+        ——录入界面负责提示补全，计算接口负责尽量把可恢复的数据算出来。
+        """
         method_id = payload.get("method")
         method = next((item for item in self.config if item["id"] == method_id), None)
         if method is None:
