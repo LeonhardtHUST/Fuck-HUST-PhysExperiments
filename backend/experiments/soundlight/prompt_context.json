@@ -43,11 +43,11 @@
       "name": "时差法测水中声速（选做）",
       "formulas": [
         "v_i=\\frac{L}{T}=1000\\times\\frac{L(\\mathrm{mm})}{T(\\mathrm{\\mu s})}\\ (\\mathrm{m/s})",
-        "v=\\frac{1}{n}\\sum_i v_i；L\\text{-}T 图斜率 a\\ (\\mathrm{\\mu s/mm})，\\quad v=\\frac{1000}{a}"
+        "T=aL+b；L\\text{-}T 图斜率 a\\ (\\mathrm{\\mu s/mm})，\\quad v=\\frac{1000}{a}"
       ],
       "criteria": [
-        "L–T 应为直线，相关系数接近 1",
-        "逐点速度与 1480 m/s 的偏差应在合理范围"
+        "L–T 应为直线，相关系数接近 1，主结果取拟合斜率换算的声速",
+        "拟合声速与 1480 m/s 的偏差应在合理范围；逐点 v_i 因固定延迟会系统性偏低"
       ],
       "tips": [
         "S2 每次移动 20 mm，起点约 40 mm，共 12 组",

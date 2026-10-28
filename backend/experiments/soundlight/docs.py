@@ -135,7 +135,7 @@ def record_blocks() -> list[dict]:
     b += [
         {"kind": "h2", "text": "方法三（选做）· 飞行时间法测声速"},
         {"kind": "note", "text": "步骤：信号发生器置脉冲/猝发模式，S1 固定；S2 从 L 约 40 mm 起每次移动 20 mm，在示波器上读出发射脉冲与接收脉冲的时间间隔 T（μs）。共 12 组 (L, T)。"},
-        {"kind": "note", "text": "处理：每点速度 v_i = (L 换算为 m)/(T 换算为 s) = L(mm)/T(μs) × 1000 (m/s)，取平均；图中对 L-T 线性拟合得斜率 a（μs/mm），v = 1000/a (m/s)。"},
+        {"kind": "note", "text": "处理：每点速度 v_i = L(mm)/T(μs) × 1000 (m/s) 仅作诊断（固定延迟会拉低短距离点）；主结果取 L–T 线性拟合斜率 a（μs/mm），v = 1000/a (m/s)。"},
         {"kind": "note", "text": "起始读数 L 起点：______ mm；本方法为选做，可结合前两法结果对比空气中声速的一致性。"},
         {
             "kind": "table",
@@ -225,18 +225,22 @@ def _adv_tof_fig(arrays):
     v = arrays["v"]
     v_mean = arrays["v_mean"]
     v_std = arrays.get("v_std", float(np.std(v, ddof=1)) if len(v) > 1 else 0.0)
+    v_fit = arrays.get("v_fit", v_mean)
     fig, ax = plt.subplots(figsize=(8.4, 4.2))
     ax.grid(True, ls=":", lw=0.6, alpha=0.7)
-    idx = list(range(1, len(v) + 1))
+    idx = arrays.get("kept_rows") or list(range(1, len(v) + 1))
     ax.plot(idx, v, "-o", color=ORANGE, ms=5, lw=1.4, label="逐点声速 v_i")
-    ax.axhline(v_mean, color=RED, ls="--", lw=1.5, label=f"均值 {v_mean:.1f} m/s")
-    ax.text(0.02, 0.96, f"v 平均 = {v_mean:.1f} m/s，标准差 = {v_std:.1f} m/s",
+    ax.axhline(v_mean, color=RED, ls="--", lw=1.5, label=f"逐点均值 {v_mean:.1f} m/s")
+    ax.axhline(v_fit, color=GREEN, ls="-.", lw=1.6, label=f"拟合声速 {v_fit:.1f} m/s")
+    ax.text(0.02, 0.96,
+            f"拟合 v = {v_fit:.1f} m/s（主结果）；逐点均值 = {v_mean:.1f} m/s，"
+            f"标准差 = {v_std:.1f} m/s\n两者差额来自与距离无关的固定延迟 T0",
             transform=ax.transAxes, fontsize=9, va="top",
             bbox=dict(boxstyle="round,pad=0.3", fc="#f1f5f9", ec=ORANGE, alpha=0.9))
-    ax.set_xlabel("测量序号 i")
+    ax.set_xlabel("原始记录行号 i")
     ax.set_ylabel("v_i (m/s)")
     ax.set_xticks(idx)
-    ax.set_title("飞行时间法：逐点声速 v_i")
+    ax.set_title("飞行时间法：逐点声速 v_i 与拟合声速对照")
     ax.legend(fontsize=8)
     fig.tight_layout()
     return _fig_b64(fig)
@@ -319,6 +323,7 @@ _WAVE_CN = {"light_sine": "正弦波", "light_square": "方波"}
 _PRESENT_ORDER = [(method, METHOD_REQUIRED[method]) for method in ORDER]
 
 C0_MS = 2.998e8            # 真空/空气光速参考值 (m/s)，讲义口径
+SOUND_WATER_REF = sl.SOUND_WATER_REF   # 水中声速参考值：定义在 engine.py，报告只做别名
 
 
 def _f(v, nd=2):
@@ -403,10 +408,25 @@ def _raw_blocks(pres) -> list[dict]:
     if tof:
         a = tof["arrays"]
         b.append(_cap("时差法数据记录（实验二，选做）：传播距离 L 与飞行时间 T"))
+        # 原始表必须用「原样录入」列（L_all/T_all）：剔除行留空、回绕行保留原始值，
+        # 行数与录入完全一致；用剔除后的 L/T 会让整张表错位并静默漏行。
         b.append(_seq_filled("sl_2_tof", [
-            [rc_f2(v, 1) for v in a["L"]],
-            [rc_f2(v, 2) for v in a["T"]],
+            [rc_f2(v, 1) for v in a.get("L_all", a["L"])],
+            [rc_f2(v, 2) for v in a.get("T_all", a["T"])],
         ]))
+        recovered = a.get("recovered_rows") or []
+        dropped = a.get("dropped_rows") or []
+        if recovered or dropped:
+            notes = []
+            if recovered:
+                notes.append("第 " + "、".join(str(n) for n in recovered)
+                             + " 行的 T 为负值，按 16 位计数器（模 65536）回绕解码后参与拟合，"
+                               "表中仍按录入值记录")
+            if dropped:
+                notes.append("第 " + "、".join(str(n) for n in dropped)
+                             + " 行无法得到物理上可用的飞行时间，已剔除、未参与拟合，"
+                               "表中保留原始录入（空白表示未填写）")
+            b.append(_cap("说明：" + "；".join(notes) + "。"))
         b.append({"kind": "spacer", "cm": 0.05})
 
     # ── 光速：表2-1 周期 + 表2-2 相位移动（正弦波/方波各自成组）──
@@ -585,8 +605,8 @@ def _proc_1b(wat) -> list[dict]:
                     f"由 v = 2×f×Δl 误差传递：UA(v) = 2×f×UA(Δl)"
                     f" = 2×{_f(f_hz, 0)}×{ua_dl_m_s} = {ua_v_s} m/s。"))
     out.append(_cap(f"结果：v ± UA(v) = {v_s} ± {ua_v_s} m/s"
-                    f"（与水中声速常用参考值 1480 m/s 相差"
-                    f" {_f(abs(a['v'] - 1480.0) / 1480.0 * 100.0, 1)}%）。"))
+                    f"（与水中声速常用参考值 {SOUND_WATER_REF:g} m/s 相差"
+                    f" {_f(abs(a['v'] - SOUND_WATER_REF) / SOUND_WATER_REF * 100.0, 1)}%）。"))
     out.append({"kind": "spacer", "cm": 0.03})
     return out
 
@@ -594,23 +614,38 @@ def _proc_1b(wat) -> list[dict]:
 def _proc_1c(tof) -> list[dict]:
     a = tof["arrays"]
     L, T, v = a["L"], a["T"], a["v"]
+    kept = a.get("kept_rows") or list(range(1, len(L) + 1))
     out = [
         _h3("处理 1c：时差法测水中声速（选做）"),
-        _cap("逐点速度：每个传播距离 L(mm) 换算为 m、对应飞行时间 T(μs) 换算为 s 后相除，"
-             "即每点 v = L(mm)/T(μs)×1000（m/s）。逐点结果见第一部分对应表格。"),
+        _cap("计算模型：换能器起振、接收建立与放大整形等环节带来与传播距离无关的"
+             "固定延迟 T0，实测时间满足 T = T0 + L/v。因此逐点 v_i = 1000×L_i/T_i 会随 L 增大"
+             "才逐渐接近真值，不宜直接作主结果；主结果改为 L–T 直线的斜率法："
+             "T = aL + b，v = 1000/a（m/s）。逐点 v_i 只作一致性诊断。"),
     ]
-    rows = [[{"text": "测量次数"}, {"text": "L (mm)"}, {"text": "T (μs)"},
-             {"text": "v (m/s)"}]]
+    rows = [[{"text": "原始行号"}, {"text": "L (mm)"}, {"text": "T (μs)"},
+             {"text": "v_i (m/s)"}]]
     for i in range(len(L)):
-        rows.append([{"text": str(i + 1)},
+        rows.append([{"text": str(kept[i])},
                      {"text": _f(L[i], 1)},
                      {"text": _f(T[i], 2)},
                      {"text": _f(v[i], 1)}])
     out.append(_tab(rows, [2.4, 4.6, 5.0, 5.2], font=8, row_h=0.42))
-    out.append(_cap(f"平均声速 v = {_f(a['v_mean'], 1)} m/s"
-                    f"（{len(L)} 个逐点速度的算术平均）；样本标准差 = {_f(a['v_std'], 1)} m/s。"
-                    f"与水中声速常用参考值 1480 m/s 相差"
-                    f" {_f(abs(a['v_mean'] - 1480.0) / 1480.0 * 100.0, 1)}%。"))
+    out.append(_cap(f"线性拟合：对 {len(L)} 个有效点以 L(mm) 为横坐标、T(μs) 为纵坐标作最小二乘拟合，"
+                    f"得 a = {_f(a['slope'], 6)} μs/mm、b = {_f(a['intercept'], 4)} μs，"
+                    f"拟合优度 R² = {_f(a['r2'], 5)}。"))
+    out.append(_cap(f"主结果：v = 1000/a = 1000/{_f(a['slope'], 6)}"
+                    f" ≈ {_f(a['v_fit'], 1)} m/s，与水中声速常用参考值 {SOUND_WATER_REF:g} m/s"
+                    f" 相差 {_f(a['error_rel'], 1)}%。"))
+    out.append(_cap(f"诊断量：逐点速度算术平均 v = {_f(a['v_mean'], 1)} m/s"
+                    f"（{len(v)} 个有效点），样本标准差 = {_f(a['v_std'], 1)} m/s。"
+                    f"该平均值系统性低于拟合值，差额即由截距 b ≈ {_f(a['intercept'], 2)} μs 的"
+                    f"固定延迟造成，两者之差可作为延迟量级的旁证。"))
+    dropped = a.get("dropped_rows") or []
+    if tof.get("warnings"):
+        out.append(_cap("数据修复与剔除说明（原始值仍保留在第一部分原始数据表）："
+                        + "；".join(tof["warnings"]) + "。"
+                        f"最终参与拟合的有效点 {a.get('valid_points', len(L))} 个，"
+                        f"剔除 {a.get('excluded_points', len(dropped))} 个。"))
     out.append({"kind": "spacer", "cm": 0.03})
     return out
 
@@ -717,8 +752,9 @@ def _err_sources_blocks(pres) -> list[dict]:
                   "每组重复 3 次取平均。"))
     b.append(_cap("（3）方法与理论近似误差：理论声速按干燥理想气体公式"
                   " v = 331.45×√(1 + t/273.15) 计算，未计湿度、气压与 CO2 含量影响；"
-                  "水中声速以 1480 m/s 常用值作参考；光速比较以真空值 c0 = 2.998×10⁸ m/s"
-                  "代替空气中光速（空气折射率 n ≈ 1.0003，差异约 0.03%）；差频相位-位移"
+                  f"水中声速以 {SOUND_WATER_REF:g} m/s 常用值作参考；"
+                  "光速比较以真空值 c0 = 2.998×10⁸ m/s 代替空气中光速"
+                  "（空气折射率 n ≈ 1.0003，差异约 0.03%）；差频相位-位移"
                   "关系假定波形严格且线性良好。减小措施：注明近似前提，需要时对声速作"
                   "湿度/气压修正，光速比较口径统一用 c0。"))
     b.append(_cap("（4）环境类误差：室温波动改变空气中声速；水中温度分布不均、气泡与"
@@ -734,12 +770,12 @@ def _err_sources_blocks(pres) -> list[dict]:
     if "water_phase" in by:
         a = by["water_phase"]["arrays"]
         concl.append(f"水中声速（相位比较法）v = {_f(a['v'], 1)} ± {_f(a['u_a_v'], 1)} m/s"
-                     f"（UA(v)），与常用参考值 1480 m/s 相差"
-                     f" {_f(abs(a['v'] - 1480.0) / 1480.0 * 100.0, 1)}%")
+                     f"（UA(v)），与常用参考值 {SOUND_WATER_REF:g} m/s 相差"
+                     f" {_f(abs(a['v'] - SOUND_WATER_REF) / SOUND_WATER_REF * 100.0, 1)}%")
     if "tof" in by:
         a = by["tof"]["arrays"]
-        concl.append(f"时差法 v = {_f(a['v_mean'], 1)} m/s，与 1480 m/s 参考值相差"
-                     f" {_f(abs(a['v_mean'] - 1480.0) / 1480.0 * 100.0, 1)}%")
+        concl.append(f"时差法（L–T 拟合）v = {_f(a['v_fit'], 1)} m/s，与 {SOUND_WATER_REF:g} m/s"
+                     f" 参考值相差 {_f(a['error_rel'], 1)}%")
     for mid in ("light_sine", "light_square", "light_lissajous"):
         if mid in by:
             a = by[mid]["arrays"]
@@ -872,10 +908,12 @@ def _advanced_blocks(methods_data) -> list[dict]:
             b.append({"kind": "spacer", "cm": 0.12})
         elif mid == "tof":
             n += 1
-            b.append({"kind": "h2", "text": f"图 {n} · 飞行时间法：逐点声速 v_i"})
+            b.append({"kind": "h2", "text": f"图 {n} · 飞行时间法：逐点声速 v_i 与拟合声速对照"})
             b.append({"kind": "image", "b64": _adv_tof_fig(arrays), "width_cm": 15.6})
             b.append({"kind": "note",
-                      "text": "分析要点：各点 v_i 应围绕均值随机涨落；观察首末点偏差可判断 L 起点读数与触发时刻的系统误差。"})
+                      "text": "分析要点：逐点 v_i 单调上升并趋近拟合声速，是固定系统延迟 T0 的典型表现"
+                              "（短距离时 T0 占比大，v_i 被拉低）；两者之差可作为 T0 的旁证。"
+                              "若个别点明显偏离趋势线，应回查该行的触发与读数。"})
             b.append({"kind": "spacer", "cm": 0.12})
     light_entries = []
     for mid in ("light_sine", "light_square", "light_lissajous"):
@@ -984,7 +1022,7 @@ def _figure_entries(present: list[tuple[str, dict]]) -> list[tuple[str, dict]]:
                             {"b64": _adv_delta_l_fig(METHOD_NAME[mid], arrays),
                              "width_cm": 13.0}))
         elif mid == "tof":
-            entries.append(("飞行时间法逐点声速一致性",
+            entries.append(("飞行时间法逐点声速与拟合声速对照",
                             {"b64": _adv_tof_fig(arrays), "width_cm": 13.0}))
     light_entries = []
     c_ref = C0_MS
@@ -1024,10 +1062,15 @@ def _equations(mid: str, run: dict) -> list[dict]:
             latex(fr"U_A(v)=2f\frac{{{t95:g}s(\Delta l)}}{{\sqrt{{{k}}}}}={a['u_a_v']:.1f}\,\mathrm{{m\,s^{{-1}}}}"),
         ]
     if mid == "tof":
+        # 公式由 mathtext 渲染，不能含中文（无字形）；「诊断量」的说明写在正文里
         return [
-            latex(r"v_i=\frac{L_i\times10^{-3}}{T_i\times10^{-6}}=1000\frac{L_i}{T_i}"),
-            latex(fr"\overline{{v}}={a['v_mean']:.1f}\,\mathrm{{m\,s^{{-1}}}},\quad s_v={a['v_std']:.2f}\,\mathrm{{m\,s^{{-1}}}}"),
-            latex(fr"T=aL+b,\quad a={a['slope']:.6f}\,\mathrm{{\mu s\,mm^{{-1}}}},\quad v_{{\rm fit}}=\frac{{1000}}{{a}}"),
+            latex(fr"v_i=1000\frac{{L_i}}{{T_i}},\quad "
+                  fr"\overline{{v}}={a['v_mean']:.1f}\,\mathrm{{m\,s^{{-1}}}},\quad "
+                  fr"s_v={a['v_std']:.2f}\,\mathrm{{m\,s^{{-1}}}}"),
+            latex(fr"T=aL+b,\quad a={a['slope']:.6f}\,\mathrm{{\mu s\,mm^{{-1}}}},\quad "
+                  fr"b={a['intercept']:.4f}\,\mathrm{{\mu s}},\quad R^2={a['r2']:.5f}"),
+            latex(fr"v=\frac{{1000}}{{a}}={a['v_fit']:.1f}\,\mathrm{{m\,s^{{-1}}}},\quad "
+                  fr"\varepsilon_r={a.get('error_rel', 0.0):.2f}\%"),
         ]
     if mid in ("light_sine", "light_square"):
         return [
@@ -1050,6 +1093,12 @@ def _analysis_blocks(present: list[tuple[str, dict]], table_count: int,
              f"第二部分共 {figure_count} 张图，集中给出原始趋势、拟合与方法对比。"
              "表图区不放分析正文，便于直接打印、裁切和粘贴。"),
     ]
+    # 表格区是四段式自动编号、不放正文，修复说明只能放在本节；先给一处指路
+    tof_run = dict(present).get("tof")
+    if tof_run and tof_run.get("warnings"):
+        blocks.append(_cap("说明：第一部分时差法的原始数据表按录入值原样记录（空白表示未填写），"
+                           "其中既有回绕恢复行也有被剔除行；逐行处理情况见下文「处理 1c」的"
+                           "数据修复与剔除说明。"))
     for mid, run in present:
         process = [b for b in _process_blocks(mid, run)
                    if b["kind"] not in ("table", "spacer")]
