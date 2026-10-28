@@ -1,6 +1,8 @@
 # NMSL-HUST-PhysExp
 
-### Next-Generation Model-Powered Synthesis Laboratory for HUST Physics Experiments
+**N**ext-Generation **M**odel-Powered **S**ynthesis **L**aboratory
+
+for HUST Physics Experiments
 
 模型驱动的下一代华中科技大学物理实验综合实验平台
 
