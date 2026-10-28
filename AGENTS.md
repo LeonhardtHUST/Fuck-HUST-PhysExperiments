@@ -66,9 +66,12 @@ python -m ocr_dataset.templates --check                        # 必须通过
 
 ### 实验数据只有「导入 / 导出」两个语义入口
 
-`ArtifactActions.tsx` 是全站唯一的实验数据出入口，别再往工具条上挂新按钮：
+`ArtifactActions.tsx` 是全站唯一的实验数据出入口，别再往工具条或页面上挂新按钮：
 
-- 顶层只两个按钮：`导入数据 / 导出数据`（单表处为 `导入此表 / 导出此表`）。
+- 顶层只两个按钮：`导入数据 / 导出`（单表处为 `导入此表 / 导出此表`）。`导出` 打开的是三页签弹窗：`完整报告` → `纸质记录表` → `读数 JSON`（`ExportTab = "report" | "record" | "data"`），缺哪个页签就不出现，第一个可用页签即默认页。
+  - 报告格式（Word / PDF / Markdown / JSONC）只允许出现在 `report` 页签；记录表（预览 / Word / PDF）只允许出现在 `record` 页签。**不要**在页面横幅、页头或结果卡里再摊开这七个按钮——历史上三组导出按钮分散在三处，用户找不到匿名分享入口。
+  - 页面内的 CTA（如「生成完整报告」）通过 `ArtifactActionsHandle`（`useImperativeHandle`，ref 暴露 `openExport(tab?) / openImport()`）打开同一个弹窗，不要在页面上再实现一份下载逻辑。
+  - 回调由工作台传入：`report={{ download, disabled, disabledHint, collection }}`、`recordSheet={{ preview, download }}`；忙碌态与错误显示在弹窗内（`pending` / `error`），下载仍走工作台自己的 `act` / `runDownload`，于是 busy 幂等只保留一份。
 - 导入弹窗内的页签顺序固定：`拍照录入` → `粘贴 / 文件` → `AI Prompt` → `Schema` → `导入备注`；OCR 页签只在传了 `ocrTargets` 时出现，备注页签只在当前 scope 有备注时出现。
 - 拍照录入不再有表格上方的常驻面板（`DataInputTable` 的 `ocr` prop 已删除）。各工作台通过 `ocrTargets`（`{ tableId, title, expectedCellCount, apply }`）提供写回闭包，二维表格一律用 `frontend/src/lib/ocr-apply.ts` 的 `applyOcrValues` 填格，已跳过只读列（序号、按行序推导的角度），不要各写一份。
 - AI Prompt 有两版，见 `frontend/src/lib/experiment-prompt.ts` 的 `PromptSource`：`photo`（默认，记录纸照片，读数不确定）与 `electronic`（仪器导出/CSV/Excel，数值确定）。共用第一~四、六~七、十节；只允许在 header、第五节填写规则、第八节第 5 条、第九节自检清单上分叉，别把照片版的取数约束带进电子版。
@@ -219,8 +222,25 @@ Get-NetTCPConnection -LocalPort 8001,3000 -State Listen -ErrorAction SilentlyCon
 
 - **偏好 key 固定 `physlab:data-collection-consent:v1`，且不得落进 `physlab:draft:v1:` 前缀**——`DraftClearMenu` 按前缀清扫，key 一旦落在里面，用户清草稿会顺手把「已询问」状态删掉，下一次生成报告又弹一次。判定集中在 `frontend/src/lib/data-collection-consent.ts` 的 `shouldPrompt`，`frontend/tests/data-collection-consent.test.ts` 覆盖 `enabled/ready/hydrated` 三种不该弹的情况。
 - **门只在 `downloadFinalReport` 里 `await gate.ensureDecided()`，不要在按钮 `onClick` 上重复实现**。门是 Promise，调用方 await 之后 `act()` / `runDownload()` 的 busy 幂等与错误处理原样生效；写成 `setPending(fn)` 会踩「函数被 React 当成 updater」的坑，并且绕开 busy 后连点会弹两次。
-- **照片入口必须同时存在于报告区那一行**。弹窗只问一次，每次实验的记录表都是新的一张；只把 `<input type=file>` 放弹窗里，第二次实验起就不会有 session，`commit` 静默 early-return，收集链看起来还活着但数据没了。
+- **照片入口必须同时存在于两处**：导出弹窗 `完整报告` 页签里的常驻面板（`DataCollectionOptInRow` 的 `variant="panel"`，开关 + 照片 + 未开放说明），以及报告区的紧凑一行 `variant="row"`。弹窗只问一次，每次实验的记录表都是新的一张；只把 `<input type=file>` 放在一次性询问里，第二次实验起就不会有 session，`commit` 静默 early-return，收集链看起来还活着但数据没了。
+- **面板不允许「后端没开就整个消失」**：`/api/data-collection/status` 返回 `enabled:false`（本地没建 `backend/.env.local` 时的默认值）时，旧的常量行直接 `return null`，于是「导出报告时看不到匿名分享」这件事无法自查。panel 变体必须落在「当前部署未开放 + 一句原因」的可读状态上，开关置灰、隐藏「设置」入口。
 - 新增弹窗一律 `createPortal(..., document.body)` + `mounted` 门（静态导出首帧没有 `document`），见第 15 条。
+
+### 20. 用 `127.0.0.1` 打开 `next dev` 会拿到「能看不能点」的页面
+
+截图 / 量测脚本里写 `http://127.0.0.1:3000` 时，页面 HTML 正常渲染，但所有按钮点了都没反应，弹窗一个都不开，页面上也没有任何报错——看起来像「导出按钮坏了」。
+
+- 病因：Next 16 dev 默认拦截跨源 dev 资源，`frontend.err.log` 里只有一行 `⚠ Blocked cross-origin request to Next.js dev resource /_next/hmr from "127.0.0.1"`。`/_next` 的 chunk 也一起被拦，客户端永不 hydration。
+- 自查顺序：先看 `page.on("pageerror")` 有没有报错（没有多半就是没 hydrate），再点一个有状态的元素（方法页签的 `aria-selected` 会不会变）；不变即未 hydration。
+- 处置：脚本一律用 `http://localhost:3000`。真要放开就在 `next.config.ts` 加 `allowedDevOrigins: ["127.0.0.1"]` 并重启，别靠改脚本猜。
+
+### 21. Playwright 只能从 npx 缓存绝对路径导入
+
+仓库没有 `playwright` 依赖，`npm root -g` 里也没有；`npx playwright --version` 能跑是因为它在 npx 缓存里。临时脚本用 `import ... from "playwright"` 会 `ERR_MODULE_NOT_FOUND`（`NODE_PATH` 对 ESM 无效）。
+
+- 路径：`file:///C:/Users/Leon/AppData/Local/npm-cache/_npx/<hash>/node_modules/playwright/index.mjs`（`ls ~/AppData/Local/npm-cache/_npx/*/node_modules/playwright` 认领）。
+- 缓存里的 playwright 版本与已装浏览器版本常常对不上（`Executable doesn't exist at ...chromium_headless_shell-1247`），直接用 `chromium.launch({ channel: "chrome" })` 走系统 Chrome，别去 `npx playwright install`。
+- 临时脚本放 `.dev-logs/`（已忽略），收尾连同截图一起删。
 
 ## 提交习惯
 
