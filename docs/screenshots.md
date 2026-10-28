@@ -4,10 +4,9 @@ README 引用的界面截图都存放在 `docs/images/`，全部来自真实运�
 
 | 文件 | 位置 | 说明 |
 |---|---|---|
-| `docs/images/home.png` | 首页 | 两个入口（普通实验 / AI 实验共建）与工作流程介绍 |
+| `docs/images/home.png` | 首页 | 单一入口、匿名化数据收集说明与工作流程介绍 |
 | `docs/images/experiments.png` | 实验库 | 12 个大学物理实验，可按分类与关键词筛选 |
 | `docs/images/workspace.png` | 实验工作台 | 子实验切换、数据录入表格、图片识别入口与报告按钮 |
-| `docs/images/cobuild-intro.png` | 实验详情页 | 「参与 PhysLab AI 实验共建」说明卡片（自愿 / 不影响实验 / 上传前脱敏 / 可撤回） |
 | `docs/images/report.png` | 实验工作台底部 | 计算、绘图与报告导出区域 |
 
 ## 重新生成截图
@@ -21,7 +20,7 @@ cd frontend && npm run dev                            # 前端（默认 3000，�
 #    首页                http://localhost:3000/
 #    实验库              http://localhost:3000/experiments/
 #    实验工作台          http://localhost:3000/experiments/multimeter/workspace
-#    AI 共建说明          http://localhost:3000/experiments/multimeter?mode=collection
+#    隐私说明            http://localhost:3000/privacy/
 #    报告区域            http://localhost:3000/experiments/multimeter/workspace
 ```
 

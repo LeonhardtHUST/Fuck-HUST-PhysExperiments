@@ -90,9 +90,10 @@ def test_ranges_are_still_warnings_not_blocks():
     assert any(item["code"] == "expected_range" for item in body.get("warnings", []))
 
 
-@pytest.mark.parametrize("relative", ["src/components/workspace/DataContributionPanel.tsx",
-                                      "src/components/workspace/CoBuildIntroCard.tsx",
-                                      "src/components/workspace/ContributionThanksDialog.tsx"])
+@pytest.mark.parametrize("relative", ["src/components/workspace/DataCollectionConsentDialog.tsx",
+                                      "src/components/workspace/DataCollectionOptInRow.tsx",
+                                      "src/components/workspace/ContributionThanksDialog.tsx",
+                                      "src/app/privacy/page.tsx"])
 def test_user_facing_copy_avoids_jargon_and_internal_ids(relative):
     source = (FRONTEND / relative).read_text(encoding="utf-8")
     for banned in ("EXIF", "session_id", "UUID", "collection_mode", "metadata.json"):
@@ -100,8 +101,9 @@ def test_user_facing_copy_avoids_jargon_and_internal_ids(relative):
     assert "sessions/" not in source, f"{relative} leaks a storage path"
 
 
-def test_home_page_shows_both_entries_side_by_side():
+def test_home_page_has_a_single_entry_and_a_privacy_link():
     source = (FRONTEND / "src/app/page.tsx").read_text(encoding="utf-8")
     assert 'href="/experiments"' in source
-    assert 'href="/experiments?mode=collection"' in source
-    assert "普通实验" in source and "AI 实验共建" in source
+    assert 'href="/privacy"' in source
+    assert "mode=collection" not in source
+    assert "AI 实验共建" not in source

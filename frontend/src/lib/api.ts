@@ -139,7 +139,7 @@ export interface DataCollectionSessionResponse {
   experiment_name?: string;
   /** How many OCR samples this contribution can produce. */
   estimated_samples?: number;
-  /** True when the session was created from the AI co-build entry. */
+  /** Server-side flag marking a session as usable training data. */
   collection_mode?: boolean;
   field_count?: number;
   status?: string;
@@ -177,7 +177,9 @@ export async function createDataCollectionSession(
   form.append("experiment_id", experimentId);
   form.append("template_version", templateVersion);
   form.append("consent", "true");
-  // Only sessions started from the AI co-build entry become training data.
+  // The backend still keys "is this training data?" off this flag (statistics,
+  // `build-ocr` gate, dataset export). Every upload now comes from an explicit
+  // opt-in, so it stays hardcoded true; the field itself is unchanged.
   form.append("collection_mode", "true");
   const res = await fetch(`${API_BASE}/api/data-collection/sessions`, {
     method: "POST",

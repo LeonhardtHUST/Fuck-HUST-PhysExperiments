@@ -37,27 +37,27 @@
 - `backend/tests/test_data_reference.py` 会重新推导这些数值（马吕斯定律、声速、光速、Cu50 斜率、太阳能电池填充因子与充电截止电压、GMR 单支灵敏度、核磁旋磁比、粘滞系数、表面张力、迈克尔逊波长、普朗克常量、弗兰克-赫兹峰间距），公式不符即测试失败。
 - `field` 指向采集层的稳定字段 ID（`method.rows.*.key`），与 `valid_stable_field_id` 校验一致；派生量填 `null`。
 
-## AI 实验共建模式（同一工作台，两种入口）
+## 匿名化数据收集（报告生成前的一次选择）
 
-数据采集不是一个独立功能，而是同一实验流程的一个开关：
+数据采集不是一个独立入口，而是报告生成前的一个选项：
 
 ```
-首页 / 实验库
-├── 普通实验        → /experiments/…            （不采集：不建 session、不存图片、不存字段）
-└── AI 实验共建      → /experiments/…?mode=collection
-        ↓ 说明卡片「参与 PhysLab AI 实验共建」→ 开始共建实验
-     同一个实验工作台（录入 → OCR/手填 → 校验 → 计算 → 绘图 → 报告）
-        ↓ 报告生成成功
-     commit（collection_mode=true，状态 confirmed）
+/experiments/…（唯一入口，无模式参数）
+     同一个实验工作台（录入 → OCR/手填 → 校验 → 计算 → 绘图）
+        ↓ 首次点任一报告格式按钮
+     对话框：复选框「启用匿名化数据收集以帮助改进服务」+ 可选「附上记录表照片」
+        ↓ 决定写入 localStorage 后继续生成报告
+     报告生成成功 → commit（collection_mode=true，状态 confirmed）
         ↓
      感谢弹窗（改进项 / 实验名 / 生成样本数 + 继续使用 PhysLab / 撤回本次贡献）
 ```
 
-- 模式只写在 URL 里（`?mode=collection`），详情页、工作台、导航链接都原样传递；没有复制任何实验页面。
-- `DataContributionPanel` 只在共建模式渲染；普通模式连上传控件都不存在，因此不可能产生 session。
-- `metadata.collection_mode` 为 `true/false`；`build-ocr`、`ocr_dataset/export.py` 只接受 **confirmed 且 collection_mode=true** 的会话，普通实验永远不会成为训练数据。
+- 偏好存在 `physlab:data-collection-consent:v1`：`{"v":1,"status":"granted"|"declined","decidedAt":…}`。「是否问过」= key 是否存在，因此**弹过一次就不会再自动弹**；`shouldPrompt`（`frontend/src/lib/data-collection-consent.ts`）是唯一判定点。
+- 门放在 `downloadFinalReport` 内部（`await gate.ensureDecided()`），不在按钮 `onClick` 上，所以 `act` / `runDownload` 的 busy 幂等与错误处理完全不变。后端未启用或 `/status` 未返回时直接放行，不弹窗。
+- 报告区常驻一行「匿名化数据收集：已开启 / 已关闭 · 附上记录表照片 · 更改」。照片入口必须留在这行里：弹窗只问一次，而每次实验的记录表都是新的，只把上传放在弹窗里会让第二次实验起没有 session，`commit` 无处可落。
+- `metadata.collection_mode` 仍由 `frontend/src/lib/api.ts` 硬编码 `true`，后端未改；`build-ocr`、`ocr_dataset/export.py` 依旧只接受 **confirmed 且 collection_mode=true** 的会话。
 - 撤回是彻底的：删除 session 目录（原图 + metadata）以及由它生成的图片、`samples.csv` / `rejected.csv` 行，并刷新 manifest 计数。
-- 开发者统计区分：`total_sessions`（总实验数）、`collection_sessions`（AI 贡献）、`plain_sessions`（普通实验，不采集）。
+- 开发者统计：`collection_sessions` 即参与实验数；`plain_sessions` 仍由后端返回但恒为 0（所有上传都来自明确同意），面板不再展示。
 
 ## 本地开发闭环
 ## 本地开发闭环（当前阶段）
@@ -109,9 +109,9 @@ backend/data_collection/
 - 隐私：原始页面只存在私有存储，导出目录只含单个数裁剪；`CollectionStorage` 提供 `local_storage()`（开发）与将来的 GCS 实现（生产）。
 - 端到端验收：把导出目录复制到 `PhysLab_OCR/data/` 后，直接运行该仓库的 `train.py` 可正常训练（loss 2.19 → 0.62，GT 保留 `26.590` 尾零）。
 
-## 数据共建体验、导出与统计
+## 数据收集体验、导出与统计
 
-**贡献卡片**：上传成功后前端展示实验类型、保存状态、后续动作与「预计生成 N 个 OCR 样本」（来自 `estimated_samples`：待确认时为模板可裁切单元格上限，确认后按 charset 合法且命中模板的字段精确计算），并保留自愿/可撤回/已脱敏的说明与「撤回贡献」按钮。卡片只显示 8 位贡献编号，不显示完整 UUID 与存储路径。
+**报告区状态行**：一行小字显示「已开启 / 已关闭」与是否已附记录表照片，点「更改」打开同一个对话框；照片入口也在这行（已开启时才出现）。上传成功后感谢弹窗展示实验类型、生成样本数（来自 `estimated_samples`：待确认时为模板可裁切单元格上限，确认后按 charset 合法且命中模板的字段精确计算），并保留自愿/可撤回/已脱敏的说明与「撤回贡献」按钮。界面不显示完整 UUID 与存储路径。
 
 **导出压缩包**：
 

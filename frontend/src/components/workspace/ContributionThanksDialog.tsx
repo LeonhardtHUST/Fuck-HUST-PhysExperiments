@@ -1,43 +1,51 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowRight, CheckCircle2, Database, ScanText, Sparkles, Trash2, Wand2 } from "lucide-react";
 import type { DataCollectionController } from "@/hooks/useDataCollection";
 
 /**
- * Thank-you dialog shown once a co-built experiment has committed its values.
+ * Thank-you dialog shown once a contribution has committed its values.
  * It reports what the contribution improves and how large it was — and offers
- * the withdrawal.  No session id, no path, no internal detail is rendered.
+ * the withdrawal. No session id, no path, no internal detail is rendered.
  */
 export default function ContributionThanksDialog({
   collection,
   experimentName,
+  onWithdrawn,
 }: {
   collection: DataCollectionController;
   experimentName?: string | null;
+  /** Lets the consent gate record the withdrawal in the local preference. */
+  onWithdrawn?: () => void;
 }) {
-  if (!collection.showThanks) return null;
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  if (!mounted || !collection.showThanks) return null;
 
   const name = collection.experimentName ?? experimentName ?? "本次实验";
   const samples = collection.estimatedSamples;
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="感谢参与 PhysLab AI 实验共建"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/50 p-4"
+      aria-label="感谢参与匿名化数据收集"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-stone-900/50 p-4"
     >
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl sm:p-7">
+      <div className="max-h-[calc(100vh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl sm:p-7">
         <div className="flex items-start gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white">
             <Sparkles className="h-5 w-5" />
           </span>
           <div className="min-w-0">
             <h2 className="text-lg font-extrabold tracking-tight text-stone-900">
-              感谢参与 PhysLab AI 实验共建！
+              感谢你帮助改进 PhysLab
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-stone-600">
-              你的本次实验记录已经帮助优化：
+              你的本次实验记录已经匿名化，用于改进：
             </p>
           </div>
         </div>
@@ -83,6 +91,7 @@ export default function ContributionThanksDialog({
             type="button"
             onClick={() => {
               void collection.withdraw();
+              onWithdrawn?.();
             }}
             className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-red-200 bg-white px-4 text-xs font-semibold text-red-700 transition-colors hover:bg-red-50"
           >
@@ -103,6 +112,7 @@ export default function ContributionThanksDialog({
           参与完全自愿；撤回后本次上传的原图与由它生成的数据样本都会被删除。
         </p>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

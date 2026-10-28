@@ -31,7 +31,9 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { getInputRange, isOutsideRange, rangeLabel } from "@/lib/input-ranges";
-import DataContributionPanel from "./DataContributionPanel";
+import DataCollectionConsentOverlays from "./DataCollectionConsentOverlays";
+import DataCollectionOptInRow from "./DataCollectionOptInRow";
+import { useDataCollectionConsent } from "@/hooks/useDataCollectionConsent";
 import ArtifactActions, { type OcrTarget } from "./ArtifactActions";
 import ArtifactRemarks from "./ArtifactRemarks";
 import { DraftClearMenu, DraftRestoreBanner } from "./WorkspaceDraftControls";
@@ -121,6 +123,7 @@ function formatValue(value: number | undefined): string {
 
 export default function GenericExperimentWorkspace({ id }: { id: string }) {
   const collection = useDataCollection(id);
+  const gate = useDataCollectionConsent(collection);
   const [config, setConfig] = useState<GenericExperimentConfig | null>(null);
   const [draft, setDraft] = useState<Draft>({});
   const [active, setActive] = useState("");
@@ -406,6 +409,9 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
 
   const reportPayload = (): GenericExperimentData => payload(completion.completedMethodIds);
   const downloadFinalReport = async (format: ReportFormat) => {
+    // One-time consent question before the first report; already answered,
+    // backend disabled or status still loading all pass straight through.
+    if (!(await gate.ensureDecided())) return;
     const data = reportPayload();
     await downloadGenericReport(id, format, data);
     await collection.commit(data);
@@ -416,6 +422,7 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
 
   return (
     <div className="container-x py-8 sm:py-12">
+      <DataCollectionConsentOverlays collection={collection} gate={gate} experimentName={config.name} />
       <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <Link href={`/experiments/${id}`} className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-stone-400 hover:text-stone-700"><ArrowLeft className="h-4 w-4" />实验说明</Link>
@@ -451,8 +458,6 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
         controller={draftStore}
         onReset={resetToDefault}
       />
-
-      <DataContributionPanel collection={collection} />
 
       {notes && (
         <ArtifactRemarks
@@ -653,6 +658,9 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
               title="下载 JSONC 版完整报告，结构见 docs/schemas/report.schema.json"
               className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 text-xs font-semibold text-stone-600 disabled:cursor-not-allowed disabled:opacity-40"
             ><FileCode2 className="h-3.5 w-3.5" />JSONC</button>
+          </div>
+          <div className="sm:text-right">
+            <DataCollectionOptInRow collection={collection} gate={gate} />
           </div>
         </div>
       </div>

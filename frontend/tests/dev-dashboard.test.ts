@@ -29,11 +29,12 @@ test("it shows sessions, confirmed sessions and sample totals", () => {
   assert.match(dashboard, /stats\.samples_created/);
 });
 
-test("it separates ordinary runs from AI contributions", () => {
-  assert.match(dashboard, /AI 贡献 Contributions/);
+test("ordinary runs no longer exist, so only contributions are counted", () => {
+  assert.match(dashboard, /参与实验 Contributions/);
   assert.match(dashboard, /stats\.collection_sessions/);
-  assert.match(dashboard, /stats\.plain_sessions/);
-  assert.match(dashboard, /普通实验 \{stats\.plain_sessions \?\? 0\} 个（不采集）/);
+  // the backend still emits `plain_sessions`, but every upload is now an
+  // explicit opt-in, so the figure is always 0 and must not be shown
+  assert.ok(!dashboard.includes("stats.plain_sessions"), "the ordinary-run split must be gone");
 });
 
 test("it breaks the totals down per experiment", () => {

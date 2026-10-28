@@ -2,10 +2,8 @@
 
 import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, ArrowRight, Clock3, FlaskConical, Layers, Sparkles } from "lucide-react";
+import { Search, ArrowRight, Clock3, FlaskConical, Layers } from "lucide-react";
 import { experiments, categories } from "@/lib/experiments";
-import { withCollectionMode } from "@/lib/collection-mode";
-import { useCollectionMode } from "@/hooks/useCollectionMode";
 import { cn } from "@/lib/utils";
 
 const CAT_STYLE: Record<string, string> = {
@@ -18,7 +16,6 @@ const CAT_STYLE: Record<string, string> = {
 };
 
 function ExperimentsPage() {
-  const collectionMode = useCollectionMode();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("全部");
 
@@ -55,17 +52,6 @@ function ExperimentsPage() {
           选择实验下载标准记录表，实验后回来录入数据，自动完成计算、拟合与出图。
         </p>
       </div>
-
-      {collectionMode && (
-        <div className="mb-6 flex flex-wrap items-start gap-3 rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4">
-          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" />
-          <p className="text-xs leading-6 text-stone-600">
-            <span className="font-bold text-indigo-800">AI 实验共建模式已开启。</span>
-            实验流程与普通模式完全一致；实验完成后，你可以自愿上传脱敏后的原始记录表，帮助 PhysLab
-            学习真实实验记录。随时可以撤回贡献，也可以在实验详情页切回普通模式。
-          </p>
-        </div>
-      )}
 
       {/* Toolbar */}
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -112,7 +98,7 @@ function ExperimentsPage() {
             return (
               <Link
                 key={exp.id}
-                href={withCollectionMode(`/experiments/${exp.id}`, collectionMode)}
+                href={`/experiments/${exp.id}`}
                 className="group relative flex flex-col overflow-hidden rounded-2xl border border-stone-200/80 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-indigo-200 hover:shadow-lift"
               >
                 {/* top accent on hover */}
