@@ -52,8 +52,15 @@
     ],
     "params": [],
     "outputs": [
-      {"key": "v_mean", "label": "平均声速 v", "unit": "m/s"},
-      {"key": "v_std", "label": "标准差", "unit": "m/s"}
+      {"key": "v_fit", "label": "拟合声速 v（1000/a）", "unit": "m/s"},
+      {"key": "slope", "label": "拟合斜率 a", "unit": "μs/mm"},
+      {"key": "intercept", "label": "拟合截距 b", "unit": "μs"},
+      {"key": "r2", "label": "拟合优度 R²", "unit": ""},
+      {"key": "error_rel", "label": "与参考值相对偏差", "unit": "%"},
+      {"key": "v_mean", "label": "逐点平均声速（诊断）", "unit": "m/s"},
+      {"key": "v_std", "label": "逐点速度标准差（诊断）", "unit": "m/s"},
+      {"key": "valid_points", "label": "有效点数", "unit": ""},
+      {"key": "excluded_points", "label": "剔除点数", "unit": ""}
     ]
   },
   {

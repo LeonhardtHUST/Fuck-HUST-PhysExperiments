@@ -20,8 +20,14 @@ params: dict[str, float]，未给出的参数使用默认值。
        v = f_mhz*1e6 * λ_m。A 类不确定度：s=std(Δl,ddof=1)，
        U_A_Δl_m = t95(k-1)*s/√k 再换算为米（n=12 → 2.571*s/√6，与讲义一致）；
        U_A(m/s) = 2*f_Hz*U_A_Δl_m（因 v=f*2*Δl_m）。
-  C. tof            飞行时间法：输入 L(mm)、T(μs) 各 n 个（n≥3，讲义：连续 12 组），
-       每点 v_i = (L_i*1e-3)/(T_i*1e-6) m/s，取平均与标准差。
+  C. tof            飞行时间法：输入 L(mm)、T(μs) 各 n 个（n≥3，讲义：连续 12 组）。
+       流水线：计数域解码 → 行级有效性 → 拟合 → 主结果。
+       a) 解码：T<0 视为设备按有符号 16 位计数差导出，仅尝试单次回绕 T+65536；
+          正数 T 原样使用，绝不机械加减模数。
+       b) 有效性：T 缺失/非数字、T=0、L≤0 的行逐行剔除并记 warning；
+          剔除后有效点仍 ≥3 即继续，<3 才失败。
+       c) 拟合：T = aL + b，主结果 v = 1000/a (m/s)；逐点 v_i = 1000*L_i/T_i
+          仅作诊断（固定系统延迟 T0 使逐点值系统性偏低）。
   D. light_sine     光速正弦法：输入 T(μs)、Δt(μs)、x1(mm)、x2(mm) 各 n 个（n≥2）+ {f_mhz=150, c_ref=2.998e8}。
        Δx_i=|x2-x1|；逐点 r_i=Δx_i/Δt_i (mm/μs)，平均值 r_mean（讲义：计算 Δx/Δt 的平均值）；
        λ(mm) = 2*T_mean(μs)*r_mean(mm/μs)，λ_m = λ_mm*1e-3；c_exp = f_mhz*1e6 * λ_m；
@@ -36,12 +42,15 @@ import base64
 import io
 import json
 import math
+import re
 from pathlib import Path
 
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+from experiments.core.numerics import fit
 
 plt.rcParams.update({
     "font.family": "sans-serif",
@@ -77,6 +86,17 @@ _PARAM_DEFAULTS = {
 
 V0 = 331.45   # 0 °C 空气中声速参考值 (m/s)
 T0 = 273.15   # 绝对零度参考 (K)
+
+# 时差法（tof）解码与验收常量。参考值只在这里定义，docs.py 通过别名复用。
+SOUND_WATER_REF = 1480.0               # 水中声速常用参考值 (m/s)
+TOF_COUNT_MOD = 65536                  # 16 位计数器模数；65535 是最大计数值，不是模数
+TOF_WRAP_SPEED_BAND = (500.0, 3000.0)  # 回绕恢复闸门：恢复后隐式声速必须落在该带宽内
+TOF_UNIT_SPEED_BAND = (100.0, 10000.0)  # 最终拟合声速的合理性界限，越界只告警（疑单位错误）
+TOF_MIN_VALID_POINTS = 3               # 能否拟合的有效点下限（与 config 的 min_rows 一致）
+
+
+class TofDecodeError(ValueError):
+    """时差法数据在解码/有效性层就无法计算；消息可直接展示给用户（不加「计算失败：」前缀）。"""
 
 # Student t 因子（置信 95%，双侧），下标为自由度；自由度超出查表范围时用正态近似。
 _T95_BY_DOF = {
@@ -130,10 +150,12 @@ def progressive_difference(values):
 
 # ──────────────────────────────────────────────── validation
 
-def _parse_col(rows, key, min_len, label, errors):
+def _parse_col(rows, key, min_len, label, errors, *, lenient=False):
     """Extract numeric column; return list[float|None] or None on structural error.
 
-    行数可以自由增删，只要不少于 min_len（计算下限）即可。
+    行数可以自由增删，只要不少于 min_len（列长度下限）即可。
+    lenient=True（仅时差法）时，无法识别为数字的格子留 None 交给行级剔除，
+    不再整表报错；min_len 与「有效点数下限」是两个独立检查，不能互相替代。
     """
     raw = rows.get(key)
     if not isinstance(raw, list):
@@ -158,7 +180,8 @@ def _parse_col(rows, key, min_len, label, errors):
             out[i] = value
             n_valid += 1
         except (TypeError, ValueError):
-            errors.append(f"{label}：第 {i + 1} 个数据无法识别为数字")
+            if not lenient:
+                errors.append(f"{label}：第 {i + 1} 个数据无法识别为数字")
     if n_valid == 0:
         errors.append(f"{label}：该列数据为空，请填写完整")
     return out
@@ -210,24 +233,27 @@ def _positions_fig(xs, ls, title, dlm, lam_mm, extra):
     return _fig_b64(fig)
 
 
-def _tof_fig(L, T, slope, intercept, r2, v_mean):
+def _tof_fig(L, T, slope, intercept, r2, v_fit, v_mean, excluded=0):
     """L(mm) 横轴 vs T(μs) 纵轴；拟合斜率单位为 μs/mm（= 1/(mm/μs)），
-    声速 v = 1/斜率 mm/μs × 1000 = 1000/斜率 (m/s)。"""
-    v_fit = 1000.0 / slope if slope else float("nan")
+    声速 v = 1/斜率 mm/μs × 1000 = 1000/斜率 (m/s)。
+
+    主结果是斜率换算值；逐点平均速度受固定系统延迟拉低，只作诊断量。
+    """
     fig, ax = plt.subplots(figsize=(8.2, 4.4))
     ax.grid(True, ls=":", lw=0.6, alpha=0.7)
     ax.scatter(L, T, s=42, color=ORANGE, zorder=3, label="测量点")
     xs = np.linspace(min(L), max(L), 50)
     ax.plot(xs, slope * xs + intercept, color=RED, lw=1.6,
             label="线性拟合 T = a·L + b")
-    txt = (f"拟合斜率 a = {slope:.4f} μs/mm；截距 b = {intercept:.4f} μs\n"
-           f"换算 v = 1000/a ≈ {v_fit:.1f} m/s；R² = {r2:.4f}\n"
-           f"逐点平均速度 v = {v_mean:.1f} m/s")
+    txt = (f"拟合 v = 1000/a ≈ {v_fit:.1f} m/s（a = {slope:.4f} μs/mm，b = {intercept:.4f} μs）\n"
+           f"R² = {r2:.5f}；逐点平均 v = {v_mean:.1f} m/s（诊断，受固定延迟拉低）")
+    if excluded:
+        txt += f"\n已剔除 {excluded} 行原始数据，详见报告说明"
     ax.text(0.03, 0.95, txt, transform=ax.transAxes, fontsize=9.5, va="top",
             bbox=dict(boxstyle="round,pad=0.35", fc="#f1f5f9", ec=RED, alpha=0.92))
     ax.set_xlabel("传播距离 L (mm)")
     ax.set_ylabel("飞行时间 T (μs)")
-    ax.set_title("飞行时间法：T 随 L 变化（v = 1/斜率 换算）")
+    ax.set_title("飞行时间法：T 随 L 变化（v = 1000/斜率 换算）")
     ax.legend(loc="lower right", fontsize=8)
     fig.tight_layout()
     return _fig_b64(fig)
@@ -336,25 +362,138 @@ def _calc_water_phase(cols, p):
     return results, b64, arrays
 
 
+def _warning_row(text: str) -> int:
+    """把「第 N 行：…」警告排序用的行号取出来；取不到排到最后。"""
+    match = re.match(r"第 (\d+) 行", text)
+    return int(match.group(1)) if match else 10 ** 6
+
+
+def _tof_decode(L_raw, T_raw):
+    """时差法原始录入值 → 可拟合点。
+
+    返回 (kept, warnings, recovered_rows, dropped_rows)；kept 元素为 (row_no, L, T)，
+    row_no 为 1-based 原始行号（报告明细表与图轴据此保持与录入表一致）。
+
+    解码规则（保守）：
+      - T>0 一律原样使用，绝不对正数机械加减模数；
+      - T<0 视为设备按有符号 16 位计数差导出，仅尝试单次回绕 T + 65536，
+        且恢复值必须过「隐式声速带宽」与「与其余点相容」两道闸门；
+      - T 缺失/非数字、T=0、L<=0 的行直接剔除。
+    任何剔除/恢复都写进 warnings，不静默丢点。
+    """
+    kept: list[tuple[int, float, float]] = []
+    pending: list[tuple[int, float, float, float, float]] = []
+    warnings: list[str] = []
+    dropped: list[int] = []
+    recovered: list[int] = []
+
+    for index, (l, t) in enumerate(zip(L_raw, T_raw)):
+        row = index + 1
+        if l is None or t is None:
+            missing = "、".join(name for name, value in (("L", l), ("T", t)) if value is None)
+            warnings.append(f"第 {row} 行：{missing} 缺失或无法识别为数字，已剔除")
+            dropped.append(row)
+            continue
+        if l <= 0:
+            warnings.append(f"第 {row} 行：传播距离 L={l:g} mm 不为正，已剔除")
+            dropped.append(row)
+            continue
+        if t > 0:
+            kept.append((row, l, t))
+            continue
+        if t == 0:
+            warnings.append(f"第 {row} 行：飞行时间 T=0 μs 无物理意义，已剔除")
+            dropped.append(row)
+            continue
+        candidate = t + TOF_COUNT_MOD
+        speed = 1000.0 * l / candidate if candidate > 0 else float("nan")
+        if math.isfinite(speed) and TOF_WRAP_SPEED_BAND[0] <= speed <= TOF_WRAP_SPEED_BAND[1]:
+            pending.append((row, l, candidate, t, speed))
+            continue
+        warnings.append(
+            f"第 {row} 行：T={t:g} μs 按 16 位计数器回绕解码得 {candidate:g} μs，"
+            f"隐式声速 {speed:.1f} m/s 不在 {TOF_WRAP_SPEED_BAND[0]:g}–"
+            f"{TOF_WRAP_SPEED_BAND[1]:g} m/s，无法可靠解码，已剔除")
+        dropped.append(row)
+
+    # 与其余点相容性：正常点够多时用临时拟合的声速做交叉验证，避免把坏点「修」成好点
+    reference = None
+    if len(kept) >= TOF_MIN_VALID_POINTS:
+        xs = [item[1] for item in kept]
+        ys = [item[2] for item in kept]
+        if np.ptp(xs) > 0:
+            slope = float(np.polyfit(xs, ys, 1)[0])
+            if slope > 0:
+                reference = 1000.0 / slope
+    for row, l, candidate, t, speed in pending:
+        if reference and abs(speed - reference) > 0.3 * reference:
+            warnings.append(
+                f"第 {row} 行：T={t:g} μs 回绕解码得 {candidate:g} μs（隐式声速 {speed:.1f} m/s）"
+                f"与其余点 {reference:.1f} m/s 不相容，已剔除")
+            dropped.append(row)
+            continue
+        kept.append((row, l, candidate))
+        recovered.append(row)
+        warnings.append(f"第 {row} 行：T={t:g} μs 按 16 位计数器（模 {TOF_COUNT_MOD}）"
+                        f"回绕恢复为 {candidate:g} μs，已参与拟合")
+
+    kept.sort(key=lambda item: item[0])
+    warnings.sort(key=_warning_row)
+    return kept, warnings, sorted(recovered), sorted(dropped)
+
+
 def _calc_tof(cols, p):
-    L = cols["L"]
-    T = cols["T"]
-    n = len(L)
-    v = [(L[i] * 1e-3) / (T[i] * 1e-6) for i in range(n)]
+    L_raw, T_raw = cols["L"], cols["T"]
+    kept, warnings, recovered_rows, dropped_rows = _tof_decode(L_raw, T_raw)
+    if len(kept) < TOF_MIN_VALID_POINTS:
+        detail = "；".join(warnings) if warnings else "无有效数据"
+        raise TofDecodeError(
+            f"有效点不足：有效 {len(kept)} 点，至少需要 {TOF_MIN_VALID_POINTS} 点"
+            f"才能做 L–T 线性拟合。{detail}")
+    L = [item[1] for item in kept]
+    T = [item[2] for item in kept]
+    if len(set(L)) < 2:
+        raise TofDecodeError("有效传播距离种类不足：T = aL + b 拟合需要至少两个不同的传播距离 L")
+    fitted = fit(L, T)
+    slope = float(fitted["slope"])
+    intercept = float(fitted["intercept"])
+    r2 = float(fitted["r_squared"])
+    if slope <= 0:
+        raise TofDecodeError("飞行时间应随传播距离增加：拟合斜率不为正，请核对 L 与 T 是否录反或单位错误")
+
+    v_fit = 1000.0 / slope
+    v = [1000.0 * l / t for l, t in zip(L, T)]
     v_mean = _mean(v)
-    v_std = float(np.std(v, ddof=1)) if n > 1 else 0.0
-    slope, intercept = np.polyfit(L, T, 1)
-    yhat = slope * np.asarray(L) + intercept
-    ss_res = float(np.sum((np.asarray(T) - yhat) ** 2))
-    ss_tot = float(np.sum((np.asarray(T) - _mean(T)) ** 2))
-    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+    v_std = float(np.std(v, ddof=1)) if len(v) > 1 else 0.0
+    error_rel = abs(v_fit - SOUND_WATER_REF) / SOUND_WATER_REF * 100.0
+    if not (TOF_UNIT_SPEED_BAND[0] <= v_fit <= TOF_UNIT_SPEED_BAND[1]):
+        warnings.append(
+            f"拟合声速 {v_fit:.1f} m/s 不在 {TOF_UNIT_SPEED_BAND[0]:g}–"
+            f"{TOF_UNIT_SPEED_BAND[1]:g} m/s 的常见范围，请核对 T 的单位（μs/count）与 L 的单位（mm）")
+
+    valid_points = len(L)
+    excluded_points = len(dropped_rows)
     results = [
-        {"key": "v_mean", "label": "平均声速 v", "value": _sig(v_mean), "unit": "m/s"},
-        {"key": "v_std", "label": "标准差", "value": _sig(v_std), "unit": "m/s"},
+        {"key": "v_fit", "label": "拟合声速 v（1000/a）", "value": _sig(v_fit), "unit": "m/s"},
+        {"key": "slope", "label": "拟合斜率 a", "value": round(slope, 6), "unit": "μs/mm"},
+        {"key": "intercept", "label": "拟合截距 b", "value": round(intercept, 4), "unit": "μs"},
+        {"key": "r2", "label": "拟合优度 R²", "value": _sig(r2, 5), "unit": ""},
+        {"key": "error_rel", "label": "与参考值相对偏差", "value": round(error_rel, 2), "unit": "%"},
+        {"key": "v_mean", "label": "逐点平均声速（诊断）", "value": _sig(v_mean), "unit": "m/s"},
+        {"key": "v_std", "label": "逐点速度标准差（诊断）", "value": _sig(v_std), "unit": "m/s"},
+        {"key": "valid_points", "label": "有效点数", "value": valid_points, "unit": ""},
+        {"key": "excluded_points", "label": "剔除点数", "value": excluded_points, "unit": ""},
     ]
-    b64 = _tof_fig(L, T, float(slope), float(intercept), float(r2), v_mean)
-    arrays = {"L": L, "T": T, "v": v, "v_mean": v_mean, "v_std": v_std,
-              "slope": float(slope), "intercept": float(intercept), "r2": float(r2)}
+    b64 = _tof_fig(L, T, slope, intercept, r2, v_fit, v_mean, excluded_points)
+    arrays = {"L": L, "T": T, "v": v,
+              "kept_rows": [item[0] for item in kept],
+              "L_all": L_raw, "T_all": T_raw,
+              "recovered_rows": recovered_rows, "dropped_rows": dropped_rows,
+              "v_fit": v_fit, "v_mean": v_mean, "v_std": v_std,
+              "slope": slope, "intercept": intercept, "r2": r2,
+              "error_rel": error_rel, "valid_points": valid_points,
+              "excluded_points": excluded_points, "n": len(L_raw),
+              "row_warnings": warnings}
     return results, b64, arrays
 
 
@@ -435,6 +574,21 @@ _CALC = {
 
 # ──────────────────────────────────────────────── public API
 
+def _assert_finite(arrays: dict) -> None:
+    """arrays 里只校验数值项；None / bool / 非数值键（行号列表等）跳过。
+
+    时差法的 L_all / T_all 会带 None（原始录入留空），不跳过会抛 TypeError
+    并被外层兜底成「计算失败：…」，属于最容易被误读成数值崩溃的假故障。
+    """
+    for value in arrays.values():
+        values = value if isinstance(value, list) else [value]
+        for item in values:
+            if isinstance(item, bool) or not isinstance(item, (int, float)):
+                continue
+            if not math.isfinite(item):
+                raise ValueError("计算结果超出有限数值范围，请检查输入")
+
+
 def analyze(method, rows, params=None):
     """Full pipeline: validation + computation + main figure + arrays (for reports)."""
     requested_method = method
@@ -444,21 +598,25 @@ def analyze(method, rows, params=None):
         return {"status": "validation_error",
                 "errors": [f"未知实验方法：{method}，可选 {list(_CALC.keys())}"],
                 "results": [], "plots": {}, "arrays": {},
-                "params_used": {}, "method": requested_method}
+                "params_used": {}, "method": requested_method,
+                "warnings": []}
     errors = []
     cols = {}
+    # 时差法允许局部坏点：无法识别的格子留 None，由 _tof_decode 逐行剔除并记 warning。
+    lenient = method == "tof"
     for key, min_len, label in _COLUMNS[method]:
-        parsed = _parse_col(rows or {}, key, min_len, label, errors)
+        parsed = _parse_col(rows or {}, key, min_len, label, errors, lenient=lenient)
         if parsed is not None:
             cols[key] = parsed
-    # 逐差 / 配对计算要求完整数据
-    for key, min_len, label in _COLUMNS[method]:
-        parsed = cols.get(key)
-        if parsed is None:
-            continue
-        for i, v in enumerate(parsed):
-            if v is None:
-                errors.append(f"{label}：第 {i + 1} 个数据缺失，请补全后再处理")
+    # 逐差 / 配对计算要求完整数据（时差法例外，缺失点转成行级剔除）
+    if not lenient:
+        for key, min_len, label in _COLUMNS[method]:
+            parsed = cols.get(key)
+            if parsed is None:
+                continue
+            for i, v in enumerate(parsed):
+                if v is None:
+                    errors.append(f"{label}：第 {i + 1} 个数据缺失，请补全后再处理")
     # 同一次测量的各列必须行数一致（不同列按行配对，不能静默截断）
     lengths = {key: len(value) for key, value in cols.items()}
     if len(set(lengths.values())) > 1:
@@ -467,17 +625,16 @@ def analyze(method, rows, params=None):
     if errors:
         return {"status": "validation_error", "errors": errors,
                 "results": [], "plots": {}, "arrays": {},
-                "params_used": {}, "method": requested_method}
+                "params_used": {}, "method": requested_method,
+                "warnings": []}
     try:
         params_used = _parse_params(method, params)
-        for key in ("T", "dt"):
-            if key in cols and any(v <= 0 for v in cols[key]):
-                raise ValueError(f"{key} 必须全部大于零，不能删除无效测量点后计算")
-        if method == "tof":
-            if any(v <= 0 for v in cols["L"]):
-                raise ValueError("传播距离 L 必须大于零")
-            if len(set(cols["L"])) < 2:
-                raise ValueError("飞行时间拟合需要至少两个不同的传播距离")
+        # 只有光速法把 T/dt 当比值分母或周期，要求整列严格为正；
+        # 时差法的 T 是直接测量量，走解码 + 行级剔除（见 _tof_decode）。
+        if method == "light_sine":
+            for key in ("T", "dt"):
+                if key in cols and any(v <= 0 for v in cols[key]):
+                    raise ValueError(f"{key} 必须全部大于零，不能删除无效测量点后计算")
         if method in ("air_resonance", "water_phase"):
             k = len(cols["l"]) // 2
             if k < 2:
@@ -493,27 +650,35 @@ def analyze(method, rows, params=None):
             results, b64, arrays = _calc_light_sine(cols, params_used, wave="方波")
         else:
             results, b64, arrays = _CALC[method](cols, params_used)
-        for value in arrays.values():
-            values = value if isinstance(value, list) else [value]
-            if any(not math.isfinite(v) for v in values):
-                raise ValueError("计算结果超出有限数值范围，请检查输入")
+        # 行级警告不进 arrays（arrays 只放数值，且要过下面的有限性检查）
+        row_warnings = arrays.pop("row_warnings", [])
+        _assert_finite(arrays)
         if method == "tof" and arrays["slope"] <= 0:
             raise ValueError("飞行时间应随传播距离增加，当前拟合斜率不为正")
+    except TofDecodeError as exc:
+        return {"status": "validation_error",
+                "errors": [str(exc)],
+                "results": [], "plots": {}, "arrays": {},
+                "params_used": {}, "method": requested_method,
+                "warnings": []}
     except Exception as exc:  # 除零等数值意外
         return {"status": "validation_error",
                 "errors": [f"计算失败：{exc}"],
                 "results": [], "plots": {}, "arrays": {},
-                "params_used": {}, "method": requested_method}
+                "params_used": {}, "method": requested_method,
+                "warnings": []}
     return {"status": "success", "errors": [],
             "results": results, "plots": {"main": b64},
             "arrays": arrays, "params_used": params_used,
             "method": requested_method,
-            "method_name": _METHOD_NAMES[requested_method]}
+            "method_name": _METHOD_NAMES[requested_method],
+            "warnings": row_warnings}
 
 
 def process_method(method, rows, params=None):
-    """前端处理接口：返回 {status, errors, results, plots}。"""
+    """前端处理接口：返回 {status, errors, warnings, results, plots}。"""
     full = analyze(method, rows, params)
     return {"status": full["status"], "errors": full["errors"],
+            "warnings": full.get("warnings", []),
             "results": full["results"], "plots": full["plots"],
             "method": full.get("method"), "method_name": full.get("method_name")}
