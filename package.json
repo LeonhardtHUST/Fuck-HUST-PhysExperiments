@@ -2,7 +2,7 @@
   "name": "physicslab",
   "version": "2.0.0-beta.1",
   "private": true,
-  "description": "HUST 大学物理实验平台：Next.js 前端 + FastAPI 后端",
+  "description": "HUST 大学物理实验平台：vinext（Vite）前端 + FastAPI 后端",
   "scripts": {
     "dev": "node scripts/dev.mjs dev",
     "build": "node scripts/dev.mjs build",
@@ -15,6 +15,6 @@
     "deploy:frontend": "node scripts/deploy.mjs frontend"
   },
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=22.18.0"
   }
 }

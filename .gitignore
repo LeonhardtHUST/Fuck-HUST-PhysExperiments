@@ -1,6 +1,8 @@
 node_modules/
 .next/
+.vinext/
 out/
+dist/
 *.log
 .DS_Store
 __pycache__/
@@ -29,3 +31,9 @@ datasets/
 
 # Deployment logs and the resolved CloudBase API address cache:
 .dev-logs/
+
+# 前端构建互斥锁（scripts/dev.ps1 / dev.sh 创建）
+frontend/.build.lock
+
+# vinext 每次 build/dev 都会重写这个类型引用文件，类型入口改用 src/vinext-env.d.ts
+frontend/next-env.d.ts
