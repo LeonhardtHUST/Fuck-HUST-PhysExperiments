@@ -18,12 +18,16 @@ PhysLab 的版本记录。格式参考 [Keep a Changelog](https://keepachangelog
 
 ### Changed
 
+- **声速光速实验的时差法（tof）改为 L–T 拟合**：主结果从「逐点 `L/T` 平均」改为 `T = aL + b` 的斜率换算 `v = 1000/a`，逐点均值与标准差降为诊断量（固定系统延迟会让短距离点系统性偏低）。结果卡片、报告汇总表与公式区同步新增 `slope / intercept / r2 / error_rel / valid_points / excluded_points`
+- **水中声速参考值统一**：`1480 m/s` 从 `docs.py` 的六处字面量收敛为 `engine.SOUND_WATER_REF` 单一常量，报告正文与相对偏差都引用它
 - **实验数据入口合并为「导入 / 导出」**：工作台工具条不再并列「导出实验数据 / 导入实验数据 / 复制 AI Prompt / 查看 Schema」四个按钮；AI Prompt、Schema、粘贴或选择文件、拍照录入（OCR）、导入备注统一收进「导入」弹窗，导出只保留纯数据导出。拍照录入不再是表格上方的常驻面板，改由导入弹窗按目标表格选择，各工作台通过 `ocrTargets` 提供写回闭包
 - **MCP 明确为本地能力**：`backend/Dockerfile` 不再打包 `mcp_server.py` / `physlab_mcp/`，`backend/.dockerignore` 同时把它们排除出构建上下文，云端只部署 `uvicorn` 的 HTTP 后端（见 `docs/deployment.md`）
 - **报告允许必做缺项**：生成报告不再被「请先填写完全部必做实验」拦截；未算出结果的必做子实验在报告第三部分标注为「必做项目缺项」并留空，其余已提交数据照常计算，HTTP 路由与 MCP 工具行为一致
 
 ### Fixed
 
+- **时差法不再因单个坏点整组失败**：`engine.analyze` 里那条本意服务光速法 `dt/T` 的「必须全部大于零」守卫不再套用到 tof。tof 现在按「计数域解码 → 行级有效性 → 拟合」处理：`T < 0` 视为设备导出的有符号 16 位计数差，仅尝试单次 `+65536` 回绕并通过「隐式声速带宽 + 与其余点相容」双重校验；缺失/`T=0`/`L≤0` 的行逐行剔除。只要有效点 ≥ 3 即继续拟合，少于 3 才失败，且报错不再带「计算失败：」前缀
+- **修复过程可见**：新增 `warnings`（`第 N 行：<原因>`）经 `/process` 透出，工作台结果页以黄色提示条列出回绕恢复与剔除明细；下载的报告在「处理 1c」逐条说明，原始数据表始终按录入值原样记录。`isMethodFilled` 同步放宽，含空格的 tof 不再被「完整报告」静默漏掉
 - **构建被中断后不再被残留锁卡死**：构建中断（崩溃 / IDE 批量删除守卫拦截 / `Ctrl+C`）会留下 `frontend/.next/lock`，再次构建直接报 `Another next build process is already running` 且不会自愈；`scripts/dev.ps1` 与 `scripts/dev.sh` 现在在 `npm run build` 前检查该锁——有存活的构建进程则明确提示并中止（避免双构建互相破坏产物），无存活进程则判定为残留并自动清理
 
 ## 2.0 — 2026-09-18
