@@ -865,22 +865,34 @@ def analyze(data: dict, bg_uw: float = 0.0, theta_qwp: float = 30.0) -> dict:
     }
 
 
+def _cell(row: dict, key: str, default="") -> str:
+    """原始读数优先取前端的原样字符串（``raw``），缺失才回落到数字格式化。"""
+    if isinstance(row, dict):
+        raw = row.get("raw")
+        if isinstance(raw, dict):
+            text = raw.get(key)
+            if isinstance(text, str) and text.strip():
+                return text.strip()
+        return _fmt(row.get(key, default))
+    return _fmt(default)
+
+
 def _raw_input_tables(data: dict) -> dict:
     """Original submitted numbers, for the raw-data tables in part reports."""
     out = {}
     if data.get("malus"):
-        out["malus"] = [[{"text": str(row.get("theta", ""))},
-                         {"text": _fmt(row.get("i_left"))},
-                         {"text": _fmt(row.get("i_right"))}] for row in data["malus"].get("rows", [])]
+        out["malus"] = [[{"text": _cell(row, "theta")},
+                         {"text": _cell(row, "i_left")},
+                         {"text": _cell(row, "i_right")}] for row in data["malus"].get("rows", [])]
     if data.get("halfwave"):
         init = data["halfwave"].get("initial", {})
         out["halfwave_init"] = [
-            [{"text": "C 初始消光位置"}, {"text": _fmt(init.get("c_deg"))}, {"text": _fmt(init.get("c_min"))}],
-            [{"text": "P2 初始消光位置"}, {"text": _fmt(init.get("p2_deg"))}, {"text": _fmt(init.get("p2_min"))}],
+            [{"text": "C 初始消光位置"}, {"text": _cell(init, "c_deg")}, {"text": _cell(init, "c_min")}],
+            [{"text": "P2 初始消光位置"}, {"text": _cell(init, "p2_deg")}, {"text": _cell(init, "p2_min")}],
         ]
-        out["halfwave"] = [[{"text": str(i + 1)}, {"text": _fmt(row.get("offset", ""))},
-                            {"text": _fmt(row.get("c_deg"))}, {"text": _fmt(row.get("c_min"))},
-                            {"text": _fmt(row.get("p2_deg"))}, {"text": _fmt(row.get("p2_min"))}]
+        out["halfwave"] = [[{"text": str(i + 1)}, {"text": _cell(row, "offset")},
+                            {"text": _cell(row, "c_deg")}, {"text": _cell(row, "c_min")},
+                            {"text": _cell(row, "p2_deg")}, {"text": _cell(row, "p2_min")}]
                            for i, row in enumerate(data["halfwave"].get("rows", []))]
     if data.get("quarterwave"):
         rows = data["quarterwave"].get("rows", [])
@@ -889,8 +901,8 @@ def _raw_input_tables(data: dict) -> dict:
             line = []
             for j in range(3):
                 if i + j < len(rows):
-                    line += [{"text": str(rows[i + j].get("phi", ""))},
-                             {"text": _fmt(rows[i + j].get("i_raw"))}]
+                    line += [{"text": _cell(rows[i + j], "phi")},
+                             {"text": _cell(rows[i + j], "i_raw")}]
                 else:
                     line += [{}, {}]
             pairs.append(line)
@@ -902,8 +914,8 @@ def _raw_input_tables(data: dict) -> dict:
             line = []
             for j in range(3):
                 if i + j < len(rows):
-                    line += [{"text": str(rows[i + j].get("angle", ""))},
-                             {"text": _fmt(rows[i + j].get("i_raw"))}]
+                    line += [{"text": _cell(rows[i + j], "angle")},
+                             {"text": _cell(rows[i + j], "i_raw")}]
                 else:
                     line += [{}, {}]
             pairs.append(line)

@@ -202,11 +202,15 @@ function PolarizationWorkspace({
     return {
       bg_uw: parseFloat(bgUw) || 0,
       theta_qwp: numberOrNull(thetaQwp) ?? 30,
+      // raw 是给报告原始数据表用的原样字符串：计算仍走上面的 number 字段
+      bg_uw_raw: bgUw.trim(),
+      theta_qwp_raw: thetaQwp.trim(),
       malus: {
         rows: malusRows.map((r) => ({
           theta: parseFloat(r[0]) || 0,
           i_left: r[1] ? parseFloat(r[1]) : null,
           i_right: r[2] ? parseFloat(r[2]) : null,
+          raw: { theta: (r[0] ?? "").trim(), i_left: (r[1] ?? "").trim(), i_right: (r[2] ?? "").trim() },
         })),
       },
       halfwave: {
@@ -215,6 +219,12 @@ function PolarizationWorkspace({
           c_min: parseFloat(hwInit.c_min) || 0,
           p2_deg: numberOrNull(hwInit.p2_deg),
           p2_min: parseFloat(hwInit.p2_min) || 0,
+          raw: {
+            c_deg: hwInit.c_deg.trim(),
+            c_min: hwInit.c_min.trim(),
+            p2_deg: hwInit.p2_deg.trim(),
+            p2_min: hwInit.p2_min.trim(),
+          },
         },
         rows: hwRows.map((r) => ({
           offset: parseFloat(r[0]) || 0,
@@ -222,18 +232,27 @@ function PolarizationWorkspace({
           c_min: parseFloat(r[2]) || 0,
           p2_deg: numberOrNull(r[3]),
           p2_min: parseFloat(r[4]) || 0,
+          raw: {
+            offset: (r[0] ?? "").trim(),
+            c_deg: (r[1] ?? "").trim(),
+            c_min: (r[2] ?? "").trim(),
+            p2_deg: (r[3] ?? "").trim(),
+            p2_min: (r[4] ?? "").trim(),
+          },
         })),
       },
       quarterwave: {
         rows: qwRows.map((r) => ({
           phi: parseFloat(r[0]) || 0,
           i_raw: r[1] ? parseFloat(r[1]) : null,
+          raw: { phi: (r[0] ?? "").trim(), i_raw: (r[1] ?? "").trim() },
         })),
       },
       circular: {
         rows: circRows.map((r) => ({
           angle: parseFloat(r[0]) || 0,
           i_raw: r[1] ? parseFloat(r[1]) : null,
+          raw: { angle: (r[0] ?? "").trim(), i_raw: (r[1] ?? "").trim() },
         })),
       },
     };

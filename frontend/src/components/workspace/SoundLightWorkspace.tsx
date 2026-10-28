@@ -57,6 +57,7 @@ import {
   previewRecordSheet,
   downloadSoundLightReport,
   type ReportFormat,
+  type SoundLightMethodData,
   type SoundLightProcessResponse,
 } from "@/lib/api";
 
@@ -568,6 +569,7 @@ export default function SoundLightWorkspace() {
     (mId: string) => {
       const mspec = METHODS.find((m) => m.id === mId)!;
       const rowsOut: Record<string, (number | null)[]> = {};
+      const rowsRaw: Record<string, string[]> = {};
       mspec.tables.forEach((table, ti) => {
         // 末尾整行空白（含自动序号列）不计入提交，行数由实际录入决定
         const rows = dataRows(getRows(mId, ti));
@@ -579,14 +581,18 @@ export default function SoundLightWorkspace() {
             const n = parseFloat(v);
             return Number.isFinite(n) ? n : null;
           });
+          // 同一次遍历产出的原样字符串，报告里的原始数据表只认它
+          rowsRaw[col.key] = rows.map((r) => (r[ci] ?? "").trim());
         });
       });
       const pOut: Record<string, number> = {};
+      const pRaw: Record<string, string> = {};
       Object.entries(getParams(mId)).forEach(([k, v]) => {
         const n = parseFloat(v);
         if (Number.isFinite(n)) pOut[k] = n;
+        if (v.trim() !== "") pRaw[k] = v.trim();
       });
-      return { rows: rowsOut, params: pOut };
+      return { rows: rowsOut, params: pOut, rows_raw: rowsRaw, params_raw: pRaw };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [cell, params, method]
@@ -611,11 +617,11 @@ export default function SoundLightWorkspace() {
     });
   };
   const filledAllReportData = () => {
-    const out: Record<string, { rows: Record<string, (number | null)[]>; params: Record<string, number> }> = {};
+    const out: SoundLightMethodData = {};
     METHODS.forEach((m) => {
       if (isMethodFilled(m.id)) {
         const p = buildPayload(m.id);
-        out[m.id] = { rows: p.rows, params: p.params };
+        out[m.id] = { rows: p.rows, params: p.params, rows_raw: p.rows_raw, params_raw: p.params_raw };
       }
     });
     return out;

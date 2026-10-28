@@ -164,11 +164,22 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
         if (value !== undefined && value !== null) parameters[parameter.key] = value;
       }
       const columnKeys = method.columns.map((column) => column.key);
+      const rows = trimDraftRows(source?.rows ?? [], columnKeys);
+      const paramsRaw: Record<string, string> = {};
+      for (const parameter of method.params ?? []) {
+        const text = (source?.params[parameter.key] ?? "").trim();
+        if (text) paramsRaw[parameter.key] = text;
+      }
       return [method.id, {
         params: parameters,
+        params_raw: paramsRaw,
         // 末尾整行空白不计入提交：录入 10 行不会被默认的 12 行模板拖成 12 行
-        rows: trimDraftRows(source?.rows ?? [], columnKeys).map((row) =>
+        rows: rows.map((row) =>
           Object.fromEntries(columnKeys.map((key) => [key, numeric(row[key] ?? "")]))
+        ),
+        // 同一次 trim 出来的原样字符串，报告里的原始数据表只认它
+        rows_raw: rows.map((row) =>
+          Object.fromEntries(columnKeys.map((key) => [key, (row[key] ?? "").trim()]))
         ),
       }];
     }));

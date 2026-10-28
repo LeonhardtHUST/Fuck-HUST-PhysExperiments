@@ -327,9 +327,11 @@ SOUND_WATER_REF = sl.SOUND_WATER_REF   # 水中声速参考值：定义在 engin
 
 
 def _f(v, nd=2):
-    """format float；None/nan -> ''。"""
+    """format float；None/nan -> ''。字符串是原始读数，原样透传。"""
     if v is None:
         return ""
+    if isinstance(v, str):
+        return v.strip()
     try:
         fv = float(v)
     except (TypeError, ValueError):
@@ -367,7 +369,25 @@ def _seq_filled(key: str, fillers: list, n_rows: int | None = None):
     return _tab(rows, widths, font=8, row_h=0.45)
 
 
-def _raw_blocks(pres) -> list[dict]:
+def _raw_col(methods_data: dict | None, mid: str, key: str, values, nd: int) -> list[str]:
+    """原始表的一列：优先用前端送来的原样字符串 ``rows_raw``，缺失才按 nd 格式化。
+
+    派生列（Δx、Δx/Δt）不在这里取值——它们是算出来的，由 precision 规则决定位数。
+    """
+    values = list(values or [])
+    if methods_data:
+        raw = (methods_data.get(mid) or {}).get("rows_raw")
+        if isinstance(raw, dict):
+            column = raw.get(key)
+            if isinstance(column, list) and len(column) == len(values):
+                return [
+                    item.strip() if isinstance(item, str) and item.strip() else rc_f2(value, nd)
+                    for item, value in zip(column, values)
+                ]
+    return [rc_f2(v, nd) for v in values]
+
+
+def _raw_blocks(pres, methods_data: dict | None = None) -> list[dict]:
     """pres: [(method_id, run), ...]（按讲义出现顺序）。"""
     by = dict(pres)
     b: list[dict] = []
@@ -387,8 +407,8 @@ def _raw_blocks(pres) -> list[dict]:
         air_l = air["arrays"]["l"] if air else None
         wat_l = wat["arrays"]["l"] if wat else None
         fill = [
-            [rc_f2(v) for v in air_l] if air_l else None,
-            [rc_f2(v) for v in wat_l] if wat_l else None,
+            _raw_col(methods_data, "air_resonance", "l", air_l, 2) if air_l else None,
+            _raw_col(methods_data, "water_phase", "l", wat_l, 2) if wat_l else None,
         ]
         b.append(_seq_filled("sl_1_air_water", fill))
         toks = []
@@ -411,8 +431,8 @@ def _raw_blocks(pres) -> list[dict]:
         # 原始表必须用「原样录入」列（L_all/T_all）：剔除行留空、回绕行保留原始值，
         # 行数与录入完全一致；用剔除后的 L/T 会让整张表错位并静默漏行。
         b.append(_seq_filled("sl_2_tof", [
-            [rc_f2(v, 1) for v in a.get("L_all", a["L"])],
-            [rc_f2(v, 2) for v in a.get("T_all", a["T"])],
+            _raw_col(methods_data, "tof", "L", a.get("L_all", a["L"]), 1),
+            _raw_col(methods_data, "tof", "T", a.get("T_all", a["T"]), 2),
         ]))
         recovered = a.get("recovered_rows") or []
         dropped = a.get("dropped_rows") or []
@@ -439,16 +459,16 @@ def _raw_blocks(pres) -> list[dict]:
         b.append(_cap(f"表2-1  差频后波形的周期测量（{wv}，水平偏转因子 0.5 μs/DIV）"))
         b.append(_seq_filled("sl_3_period", [
             None,
-            [rc_f2(v, 3) for v in a["T"]],
+            _raw_col(methods_data, mid, "T", a["T"], 3),
         ]))
         b.append({"kind": "spacer", "cm": 0.02})
         b.append(_cap(f"表2-2  参考点水平移动时间 Δt 与滑块（反射镜）移动距离 Δx"
                       f"（{wv}，水平偏转因子 0.2 μs/DIV）"))
         b.append(_seq_filled("sl_4_phase", [
             None,
-            [rc_f2(v, 2) for v in a["dt"]],
-            [rc_f2(v, 2) for v in a["x1"]],
-            [rc_f2(v, 2) for v in a["x2"]],
+            _raw_col(methods_data, mid, "dt", a["dt"], 2),
+            _raw_col(methods_data, mid, "x1", a["x1"], 2),
+            _raw_col(methods_data, mid, "x2", a["x2"], 2),
             [rc_f2(v, 2) for v in a["dx"]],
             [rc_f2(v, 3) for v in a["r"]],
         ]))
@@ -460,8 +480,8 @@ def _raw_blocks(pres) -> list[dict]:
         a = lis["arrays"]
         b.append(_cap("表2-3  李萨如图形法：反射镜滑块移动的距离 Δx"))
         b.append(_seq_filled("sl_5_lissajous", [
-            [rc_f2(v, 2) for v in a["x1"]],
-            [rc_f2(v, 2) for v in a["x2"]],
+            _raw_col(methods_data, "light_lissajous", "x1", a["x1"], 2),
+            _raw_col(methods_data, "light_lissajous", "x2", a["x2"], 2),
             [rc_f2(v, 2) for v in a["dx"]],
         ]))
         b.append({"kind": "spacer", "cm": 0.05})
@@ -978,9 +998,9 @@ def _process_blocks(mid: str, run: dict) -> list[dict]:
     return _proc_2b(run)
 
 
-def _table_entries(present: list[tuple[str, dict]]) -> list[tuple[str, dict]]:
+def _table_entries(present: list[tuple[str, dict]], methods_data: dict | None = None) -> list[tuple[str, dict]]:
     by = dict(present)
-    raw_tables = [b for b in _raw_blocks(present) if b["kind"] == "table"]
+    raw_tables = [b for b in _raw_blocks(present, methods_data) if b["kind"] == "table"]
     raw_names: list[str] = []
     if by.get("air_resonance") or by.get("water_phase"):
         raw_names.append("空气共振法与水中相位法原始数据")
@@ -1134,7 +1154,7 @@ def report_blocks(methods_data: dict, legacy_data: dict | None = None) -> list[d
     present, failed = _successful_runs(methods_data or {})
     if not present:
         return [{"kind": "note", "text": "没有可处理的已提交方法数据。"}]
-    tables = _table_entries(present)
+    tables = _table_entries(present, methods_data)
     figures = _figure_entries(present)
     return four_section_report(
         tables,
