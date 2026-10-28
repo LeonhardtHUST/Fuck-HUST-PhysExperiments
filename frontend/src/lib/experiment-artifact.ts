@@ -5,6 +5,9 @@
  * Export = strict JSON. Schema / prompt = JSONC (see experiment-schema.ts).
  * Decoding is intentionally forgiving: unknown tables/columns become warnings,
  * broken rows never abort the whole import.
+ *
+ * 数值单元格以**字符串**写出（"1.20"、"0.000100"、"1.20e-3"）：有效数字是数据的一部分，
+ * 转成 JSON number 会丢掉末尾 0 与写法。旧的数字型文件仍然可以导入（解码时 String()）。
  */
 
 import { stringifyJson, tryParseJsonc } from "./jsonc.ts";
@@ -86,11 +89,11 @@ function isEmptyCell(value: CellValue | undefined): boolean {
   return value === null || value === undefined || String(value).trim() === "";
 }
 
-function encodeCell(value: CellValue | undefined, numeric: boolean): CellValue {
+function encodeCell(value: CellValue | undefined): CellValue {
   if (isEmptyCell(value)) return null;
-  if (!numeric) return String(value);
-  const parsed = typeof value === "number" ? value : Number(String(value).trim());
-  return Number.isFinite(parsed) ? parsed : String(value);
+  // 单元格一律按原样字符串写出：JSON number 存不了 "1.20" 的末尾 0，也存不了 "1.20e-3" 的写法，
+  // 而这两者都是有效数字的一部分。数值合法性由后端校验，不在序列化时做归一化。
+  return typeof value === "string" ? value.trim() : String(value);
 }
 
 function trimTrailingEmptyRows(
@@ -112,14 +115,14 @@ function encodeTable(table: TableSpec, input: ArtifactTableInput): ExperimentArt
   const rows = input.rows.map((row) => {
     const encoded: Record<string, CellValue> = {};
     for (const column of table.columns) {
-      encoded[column.key] = encodeCell(row[column.key], column.kind !== "text");
+      encoded[column.key] = encodeCell(row[column.key]);
     }
     return encoded;
   });
   const params: Record<string, CellValue> = {};
   for (const param of table.params) {
     const value = input.params?.[param.key];
-    if (!isEmptyCell(value)) params[param.key] = encodeCell(value, true);
+    if (!isEmptyCell(value)) params[param.key] = encodeCell(value);
   }
   const result: ExperimentArtifact["tables"][string] = {
     rows: trimTrailingEmptyRows(rows, keys),
@@ -140,7 +143,7 @@ export function buildArtifact(spec: ExperimentSpec, input: ArtifactInput): Exper
   const setupParams: Record<string, CellValue> = {};
   for (const param of spec.setupParams) {
     const value = input.setupParams?.[param.key];
-    if (!isEmptyCell(value)) setupParams[param.key] = encodeCell(value, true);
+    if (!isEmptyCell(value)) setupParams[param.key] = encodeCell(value);
   }
 
   const artifact: ExperimentArtifact = {
@@ -350,9 +353,8 @@ function decodeComputed(
     if (label) entry.label = label;
     const unit = cleanText(value.unit, 40);
     if (unit) entry.unit = unit;
-    const numeric = typeof value.value === "number" ? value.value : Number(value.value);
-    if (Number.isFinite(numeric) && String(value.value ?? "").trim() !== "") entry.value = numeric;
-    else if (value.value !== null && value.value !== undefined && String(value.value).trim() !== "") {
+    // AI 参考值同样保留原始写法（"6.62e-34"、"1.20"），不转 number
+    if (value.value !== null && value.value !== undefined && String(value.value).trim() !== "") {
       entry.value = cleanText(value.value, 120);
     }
     const note = cleanText(value.note, 300);

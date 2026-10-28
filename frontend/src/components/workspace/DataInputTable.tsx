@@ -219,9 +219,18 @@ export default function DataInputTable({
                           if (!inputRefs.current[ri]) inputRefs.current[ri] = [];
                           inputRefs.current[ri][ci] = el;
                         }}
-                        type={readonly ? "text" : "number"}
-                        step="any"
-                        inputMode={readonly ? undefined : "decimal"}
+                        // 一律用 text：数字输入框会把 "-"、"1e"、"1." 这类半成品静默清空，
+                        // 也会让 "1.20" 这样的末尾 0 在 DOM 里被规范化掉。数值合法性由后端校验。
+                        type="text"
+                        inputMode={
+                          readonly
+                            ? undefined
+                            : (headers[ci]?.range?.min ?? 0) < 0
+                              ? "text" // 有负读数时手机键盘必须带负号键
+                              : "decimal"
+                        }
+                        autoComplete="off"
+                        spellCheck={false}
                         readOnly={readonly}
                         aria-readonly={readonly || undefined}
                         aria-invalid={outside || undefined}

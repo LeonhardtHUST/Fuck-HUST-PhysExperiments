@@ -51,8 +51,9 @@ function columnComment(column: TableColumnSpec): string {
     );
   }
   if (column.hint) parts.push(column.hint);
-  const example = JSON.stringify({ [column.key]: 0 });
-  return `${parts.join(" · ")}　示例 ${example}`;
+  // 示例必须是字符串：写 0 会让 AI 一律输出数字，末尾 0 与科学计数法在 JSON 里就没了
+  const example = JSON.stringify({ [column.key]: "1.20" });
+  return `${parts.join(" · ")}　示例 ${example}（数值写字符串，保留读数原样）`;
 }
 
 function paramsComment(params: TableParamSpec[]): string {
@@ -101,6 +102,9 @@ function tableBlock(table: TableSpec, rowLines: string[]): string {
 function tableRowHints(table: TableSpec): string[] {
   return [
     comment("每行一个对象，按记录纸顺序排列；缺失值写 null，不要编造；单位见列注释"),
+    comment(
+      "数值一律写成字符串（如 \"1.20\"、\"0.000100\"、\"1.20e-3\"）：原样抄写记录纸，保留末尾 0 与估读位，不要补位、截位，也不要把同一列统一成相同位数"
+    ),
     table.columns.map((column) => comment(columnComment(column))).join("\n"),
     comment(
       `至少 ${table.minRows} 行；超出推荐行数（${table.defaultRows}）也允许，系统不会截断`
@@ -159,6 +163,7 @@ function computedBlock(spec: ExperimentSpec, context?: PromptContext): string | 
   }
   if (aiEntries.length > 0) {
     lines.push(comment("以下派生量后端不计算，可由 AI 填写并把 source 标为 ai；前端只作参考值展示"));
+    lines.push(comment("value 同样写字符串，按你算到的有效数字位数书写（如 \"6.63e-34\"）"));
     for (const entry of aiEntries) {
       const key = computedKey(entry.methodId, entry.key);
       const hint = entry.hint ? `，${entry.hint}` : "";

@@ -443,7 +443,6 @@ export interface GenericColumn {
   type?: "integer" | "float";
   required?: boolean;
   expected_range?: [number, number];
-  decimal_places?: number;
   /** 现场实测参数的填写说明（空白记录表同样以浅灰小字印出） */
   hint?: string;
 }
