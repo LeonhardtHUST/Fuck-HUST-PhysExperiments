@@ -14,6 +14,9 @@ test("数据录入不再用 type=number（会吞掉半成品输入与末尾 0）
   for (const file of [
     "src/components/workspace/DataInputTable.tsx",
     "src/components/workspace/OcrTableImporter.tsx",
+    "src/components/workspace/GenericExperimentWorkspace.tsx",
+    "src/components/workspace/SoundLightWorkspace.tsx",
+    "src/app/experiments/[id]/workspace/client-page.tsx",
   ]) {
     const text = source(file);
     assert.equal(/type="number"/.test(text), false, `${file} 仍然使用 type="number"`);

@@ -515,8 +515,10 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
                     {rangeLabel(rangeFor(id, current.id, parameter), parameter.unit)}
                   </span>
                   <input
-                    type="number"
-                    step="any"
+                    type="text"
+                    inputMode={(rangeFor(id, current.id, parameter)?.min ?? 0) < 0 ? "text" : "decimal"}
+                    autoComplete="off"
+                    spellCheck={false}
                     value={draft[current.id]?.params[parameter.key] ?? ""}
                     onChange={(event) => updateParam(current.id, parameter.key, event.target.value)}
                     onWheel={(event) => event.currentTarget.blur()}
@@ -550,8 +552,10 @@ export default function GenericExperimentWorkspace({ id }: { id: string }) {
                             inputRefs.current[rowIndex] ??= [];
                             inputRefs.current[rowIndex][columnIndex] = element;
                           }}
-                          type="number"
-                          step="any"
+                          type="text"
+                          inputMode={(rangeFor(id, current.id, column)?.min ?? 0) < 0 ? "text" : "decimal"}
+                          autoComplete="off"
+                          spellCheck={false}
                           value={row[column.key] ?? ""}
                           onChange={(event) => updateCell(current.id, rowIndex, column.key, event.target.value)}
                           onKeyDown={(event) => handleGridKeyDown(event, rowIndex, columnIndex)}

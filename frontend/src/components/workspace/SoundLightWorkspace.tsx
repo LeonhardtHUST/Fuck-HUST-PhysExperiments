@@ -960,8 +960,12 @@ export default function SoundLightWorkspace() {
                           <span className="text-[10px] font-medium text-amber-600">{rangeLabel(p.range, p.unit)}</span>
                         )}
                         <input
-                          type="number"
-                          step="any"
+                          type="text"
+                          inputMode={
+                            (p.range?.min ?? 0) < 0 ? "text" : "decimal"
+                          }
+                          autoComplete="off"
+                          spellCheck={false}
                           value={getParams(method)[p.key]}
                           onChange={(e) =>
                             setParams((prev) => ({

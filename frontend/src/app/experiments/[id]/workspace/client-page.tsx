@@ -740,8 +740,10 @@ function PolarizationWorkspace({
                   <span className="text-[10px] font-medium text-amber-600">{rangeLabel(getInputRange("polarization", "setup", "bg_uw"), "μW")}</span>
                   <span className="relative inline-flex items-center">
                     <input
-                      type="number"
-                      step="any"
+                      type="text"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      spellCheck={false}
                       value={bgUw}
                       onChange={(e) => setBgUw(e.target.value)}
                       onWheel={(e) => e.currentTarget.blur()}
@@ -758,9 +760,10 @@ function PolarizationWorkspace({
                   <span className="text-[10px] font-medium text-amber-600">{rangeLabel(getInputRange("polarization", "setup", "theta_qwp"), "°")}</span>
                   <span className="relative inline-flex items-center">
                     <input
-                      type="number"
-                      step="any"
+                      type="text"
                       inputMode="decimal"
+                      autoComplete="off"
+                      spellCheck={false}
                       value={thetaQwp}
                       onChange={(e) => setThetaQwp(e.target.value)}
                       onWheel={(e) => e.currentTarget.blur()}
@@ -862,7 +865,10 @@ function PolarizationWorkspace({
                         <span className="text-xs font-medium text-stone-400">{f.label}</span>
                         <span className="text-[10px] font-medium text-amber-600">{rangeLabel(range, unit)}</span>
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
+                          autoComplete="off"
+                          spellCheck={false}
                           value={hwInit[f.key as keyof typeof hwInit]}
                           onChange={(e) =>
                             setHwInit((prev) => ({ ...prev, [f.key]: e.target.value }))

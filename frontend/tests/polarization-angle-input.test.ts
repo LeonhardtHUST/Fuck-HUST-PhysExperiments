@@ -15,8 +15,9 @@ test("quarter-wave fast-axis angle is a freely editable numeric input", () => {
 
   assert.ok(control, "quarter-wave angle control should exist");
   assert.match(control, /<input/);
-  assert.match(control, /type="number"/);
-  assert.match(control, /step="any"/);
+  // text + inputMode：type=number 会把 "30.0" 的末尾 0 和半成品 "-" 吞掉
+  assert.match(control, /type="text"/);
+  assert.match(control, /inputMode="decimal"/);
   assert.match(control, /onWheel=/);
   assert.match(control, />\s*°\s*<\/span>/);
   assert.doesNotMatch(control, /<select/);
