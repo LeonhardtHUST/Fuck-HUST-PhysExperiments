@@ -87,3 +87,30 @@ def test_soundlight_raw_columns_keep_written_digits():
 @pytest.mark.parametrize("text", ["1.20", "0.000100", "1.20e-3", "-0.030"])
 def test_soundlight_formatter_passes_strings_through(text):
     assert docs._f(text, 2) == text
+
+
+def test_generic_result_table_follows_precision_rules():
+    experiment = registry.get("michelson")
+    method = experiment.config["methods"][0]
+    block = documents._result_table(
+        method,
+        {"wavelength": 632.8123, "relative_error": 1.2345, "delta_d_mean": 0.154},
+        "michelson",
+        [{"position": "12.30"}, {"position": "12.45"}],
+    )
+    cells = {row[0]["text"]: row[1]["text"] for row in block["rows"][1:]}
+    labels = {field["key"]: field["label"] for field in method["results"]}
+    assert cells[labels["wavelength"]] == "632.8"          # 4 位有效数字
+    assert cells[labels["relative_error"]] == "1.23"       # 相对误差 2 位小数
+    assert cells[labels["delta_d_mean"]] == "0.15"         # 与位置读数同末位
+
+
+def test_soundlight_result_table_follows_precision_rules():
+    run = {"method": "light_sine", "results": [
+        {"key": "c_exp", "label": "实验光速", "value": 299792458.0, "unit": "m/s"},
+        {"key": "error_rel", "label": "相对误差", "value": 1.23456, "unit": "%"},
+        {"key": "data_points", "label": "数据点数", "value": 6.0, "unit": ""},
+    ]}
+    block = docs._result_table(run, "light_sine", {})
+    texts = [row[1]["text"] for row in block["rows"][1:]]
+    assert texts == ["2.998e8", "1.23", "6"]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 
+from experiments.core.precision import format_result
 from experiments.polarization import docbuild
 from experiments.report_layout import four_section_report, latex
 
@@ -139,15 +140,25 @@ def record_bytes(experiment, fmt: str) -> bytes:
     return docbuild.render_docx(blocks,landscape=False,cn="宋体",cn_en="宋体") if fmt=="docx" else docbuild.render_pdf(blocks,landscape=False,cn_pref="msyh")
 
 
-def _result_table(method: dict, values: dict) -> dict:
+def _result_table(method: dict, values: dict, experiment_id: str, source_rows=None) -> dict:
     rows=[["结果量","数值","单位"]]
-    for field in method.get("results",[]): rows.append([field["label"],values.get(field["key"]),field.get("unit","")])
+    for field in method.get("results",[]):
+        key=field["key"]
+        text=format_result(values.get(key), experiment_id, method["id"], key,
+                           unit=field.get("unit") or None,
+                           rows=source_rows, columns=method.get("columns"))
+        rows.append([field["label"],text,field.get("unit","")])
     return _table(rows,3)
 
 
-def _derived_table(rows: list[dict]) -> dict | None:
+def _derived_table(rows: list[dict], experiment_id: str, method: dict, source_rows=None) -> dict | None:
     if not rows: return None
-    keys=list(rows[0].keys()); table_rows=[keys]+[[row.get(key,"") for key in keys] for row in rows]
+    keys=list(rows[0].keys())
+    table_rows=[keys]+[
+        [format_result(row.get(key), experiment_id, method["id"], key,
+                       rows=source_rows, columns=method.get("columns")) for key in keys]
+        for row in rows
+    ]
     if len(table_rows)>25 and len(keys)<=3: table_rows=_fold_rows(table_rows)
     return _table(table_rows,len(table_rows[0]),7.2 if len(table_rows[0])>6 else 8)
 
@@ -170,18 +181,25 @@ def report_blocks(experiment, data: dict) -> list[dict]:
             tables.append((safe_text(f"{method['name']}参数"),_table([[p["label"] for p in method["params"]],[raw_param(payload, p["key"], payload.get("params",{}).get(p["key"],p.get("default",""))) for p in method["params"]]],len(method["params"]))))
         tables.append((safe_text(f"{method['name']}原始数据"),_method_raw_table(method,payload)))
         detail_rows=run["derived"].get(method_id,[])
-        detail=_derived_table(detail_rows)
+        source_rows=payload.get("rows_raw") or payload.get("rows")
+        detail=_derived_table(detail_rows, experiment.id, method, source_rows)
         if detail: tables.append((safe_text(f"{method['name']}计算明细"),detail))
-        tables.append((safe_text(f"{method['name']}结果汇总"),_result_table(method,result)))
+        tables.append((safe_text(f"{method['name']}结果汇总"),_result_table(method,result,experiment.id,source_rows)))
         if method_id in run["plots"]:
             figures.append((safe_text(method["name"]),{"b64":run["plots"][method_id],"width_cm":12.5}))
         analysis.append({"kind":"h3","text":safe_text(method["name"])})
         analysis.append({"kind":"para","text":safe_text(method["description"]+"。先筛除空白行并统一到公式所示单位，再计算明细表和汇总结果。")})
         for formula in experiment.formulas.get(method_id,[]): analysis.append(latex(formula))
         for row_index, row in enumerate(detail_rows, start=1):
-            substitutions="，".join(f"{key}={fmt(value)}" for key,value in row.items())
+            substitutions="，".join(
+                f"{key}={format_result(value, experiment.id, method_id, key, rows=source_rows, columns=method.get('columns'))}"
+                for key,value in row.items()
+            )
             analysis.append({"kind":"note","text":safe_text(f"第 {row_index} 组逐点代入：{substitutions}。")})
-        rendered="；".join(f"{field['label']}={fmt(result.get(field['key']))} {field.get('unit','')}" for field in method.get("results",[]))
+        rendered="；".join(
+            f"{field['label']}={format_result(result.get(field['key']), experiment.id, method_id, field['key'], unit=field.get('unit') or None, rows=source_rows, columns=method.get('columns'))} {field.get('unit','')}"
+            for field in method.get("results",[])
+        )
         analysis.append({"kind":"para","text":safe_text("本组数据代入后："+rendered+"。完整逐点中间量见第一部分对应计算明细表。")})
         analysis.extend(experiment.report_analysis(method_id, result))
     discussion=config["discussion"]

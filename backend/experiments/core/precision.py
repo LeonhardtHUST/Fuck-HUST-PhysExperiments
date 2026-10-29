@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 from dataclasses import dataclass
@@ -68,10 +69,17 @@ class Precision:
         if isinstance(value, str):
             return format_readout(value)
         try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return str(value)
+        # 退化数据（读数正好等于背景、除零）会算出 inf/nan：与旧行为一致，打印占位符。
+        if not math.isfinite(number):
+            return "—"
+        try:
             if self.sigfigs is not None:
-                return format_sig(value, self.sigfigs)
+                return format_sig(number, self.sigfigs)
             if self.places is not None:
-                return format_places(value, self.places)
+                return format_places(number, self.places)
         except (TypeError, ValueError):
             return str(value)
         return str(value)
@@ -224,6 +232,11 @@ RESULT_RULES: dict[tuple[str, str, str], Rule] = {
     ("polarization", "*", "theta_nl_fit"): _places(2, "拟合角度 0.01°"),
     ("polarization", "*", "theta_nl_err"): _places(2, "拟合角度误差 0.01°"),
     ("polarization", "*", "max_abs_error"): _places(2, "最大偏差 0.01"),
+    ("polarization", "*", "cos2theta"): _places(4, "cos²θ 为中间量，4 位小数足够定位"),
+    ("polarization", "*", "I_corrected"): _places(2, "背景修正列与光强读数同末位"),
+    ("polarization", "*", "delta_c"): _places(1, "角度差值与度盘读数同末位（0.1°）"),
+    ("polarization", "*", "delta_p2"): _places(1, "角度差值与度盘读数同末位（0.1°）"),
+    ("polarization", "*", "delta_error_minute"): _places(0, "分度读到 1′，ΔP2−2ΔC 以整分报告"),
 }
 
 _PCT_KEYS = re.compile(

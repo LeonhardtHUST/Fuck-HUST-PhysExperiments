@@ -15,6 +15,8 @@ from functools import lru_cache
 
 import numpy as np
 
+from experiments.core.precision import format_result
+
 from docx import Document
 from docx.enum.section import WD_ORIENT
 from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ROW_HEIGHT_RULE
@@ -1047,12 +1049,6 @@ def _num(v):
     return None if f != f else f
 
 
-def _i2(v):
-    """光强：2 位小数，空值 -> ''."""
-    f = _num(v)
-    return "" if f is None else f"{f:.2f}"
-
-
 def _c(text) -> dict:
     return {"text": str(text)}
 
@@ -1079,9 +1075,10 @@ def _malus_full(rr: dict, data_rows: list, bg: float) -> tuple:
         i_r_c = rr["I_right_corr"][i] if aligned else (
             None if i_r_raw is None else i_r_raw - bg)
         rows.append([
-            _c(_fmt(th)), _c("" if c2 is None else f"{c2:.4f}"),
-            _c(_i2(i_l_raw)), _c(_i2(i_r_raw)),
-            _c(_i2(i_l_c)), _c(_i2(i_r_c)),
+            _c(_cell(row, "theta")), _c(format_result(c2, "polarization", "malus", "cos2theta")),
+            _c(_cell(row, "i_left")), _c(_cell(row, "i_right")),
+            _c(format_result(i_l_c, "polarization", "malus", "I_corrected")),
+            _c(format_result(i_r_c, "polarization", "malus", "I_corrected")),
         ])
     return headers, [1.9, 2.7, 3.2, 3.2, 3.4, 3.4], rows
 
@@ -1113,11 +1110,12 @@ def _halfwave_full(rr: dict, data_rows: list, init: dict) -> tuple:
             err = dp - 2.0 * dc
         rows.append([
             _c(str(i + 1)),
-            _c(_fmt(row.get("offset")) if _num(row.get("offset")) is not None else "0"),
-            _c(_fmt(row.get("c_deg"))), _c(_fmt(row.get("c_min"))),
-            _c(_fmt(row.get("p2_deg"))), _c(_fmt(row.get("p2_min"))),
-            _c(_fmt(dc)), _c(_fmt(dp)),
-            _c(f"{err * 60.0:.1f}"),
+            _c(_cell(row, "offset") if _num(row.get("offset")) is not None else "0"),
+            _c(_cell(row, "c_deg")), _c(_cell(row, "c_min")),
+            _c(_cell(row, "p2_deg")), _c(_cell(row, "p2_min")),
+            _c(format_result(dc, "polarization", "halfwave", "delta_c")),
+            _c(format_result(dp, "polarization", "halfwave", "delta_p2")),
+            _c(format_result(err * 60.0, "polarization", "halfwave", "delta_error_minute")),
         ])
     return headers, [1.5, 2.1, 1.9, 1.7, 1.9, 1.7, 2.0, 2.1, 2.9], rows
 
@@ -1142,7 +1140,9 @@ def _curve_full(rr: dict, data_rows: list, bg: float,
                 ang = row.get(ang_key)
                 raw = _num(row.get("i_raw"))
                 corr = ic[i + j] if aligned else (None if raw is None else raw - bg)
-                line += [_c(_fmt(ang)), _c(_i2(raw)), _c(_i2(corr))]
+                method_key = "quarterwave" if ang_key == "phi" else "circular"
+                line += [_c(_cell(row, ang_key)), _c(_cell(row, "i_raw")),
+                         _c(format_result(corr, "polarization", method_key, "I_corrected"))]
             else:
                 line += [_c(""), _c(""), _c("")]
         rows.append(line)
@@ -1166,8 +1166,8 @@ def _complete_table_blocks(key: str, run: dict, data: dict) -> list[dict]:
         init = (data.get("halfwave") or {}).get("initial") or {}
         rows_init = [
             [_c("项目"), _c("度"), _c("分")],
-            [_c("C 初始消光位置"), _c(_fmt(init.get("c_deg"))), _c(_fmt(init.get("c_min")))],
-            [_c("P2 初始消光位置"), _c(_fmt(init.get("p2_deg"))), _c(_fmt(init.get("p2_min")))],
+            [_c("C 初始消光位置"), _c(_cell(init, "c_deg")), _c(_cell(init, "c_min"))],
+            [_c("P2 初始消光位置"), _c(_cell(init, "p2_deg")), _c(_cell(init, "p2_min"))],
         ]
         blocks.append({"kind": "table", "widths": [9.0, 4.4, 4.4],
                        "font": 8.5, "row_h": 0.6, "rows": rows_init})
@@ -1221,7 +1221,8 @@ def _summary_table_block(key: str, run: dict) -> list[dict]:
     for k in order:
         if k in s:
             v = s[k]
-            rows.append([{"text": _SUMMARY_LABELS.get(k, k)}, {"text": _fmt(v)}])
+            rows.append([{"text": _SUMMARY_LABELS.get(k, k)},
+                         {"text": format_result(v, "polarization", key, k)}])
     pairs = []
     for i in range(0, len(rows), 2):
         pair = rows[i] + (rows[i + 1] if i + 1 < len(rows) else [{"text": ""}, {"text": ""}])

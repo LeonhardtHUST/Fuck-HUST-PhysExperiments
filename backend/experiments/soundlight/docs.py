@@ -24,6 +24,7 @@ plt.rcParams.update({
     "savefig.dpi": 200,
 })
 
+from experiments.core.precision import format_result
 from experiments.polarization.docbuild import render_docx, render_pdf
 from experiments.soundlight import engine as sl
 
@@ -975,12 +976,17 @@ def _successful_runs(methods_data: dict) -> tuple[list[tuple[str, dict]], list[t
     return present, failed
 
 
-def _result_table(run: dict) -> dict:
+def _result_table(run: dict, mid: str = "", methods_data: dict | None = None) -> dict:
     rows = [[{"text": "结果量"}, {"text": "数值"}, {"text": "单位"}]]
+    method_id = mid or run.get("method", "")
+    payload = (methods_data or {}).get(method_id) or {}
+    source_rows = payload.get("rows_raw") or payload.get("rows")
     for item in run.get("results", []):
         rows.append([
             {"text": item["label"]},
-            {"text": str(item["value"])},
+            {"text": format_result(item.get("value"), "sound-light", method_id,
+                                   item["key"], unit=item.get("unit") or None,
+                                   rows=source_rows)},
             {"text": item.get("unit", "")},
         ])
     return _tab(rows, [8.4, 5.2, 4.2], font=8, row_h=0.44)
@@ -1025,7 +1031,7 @@ def _table_entries(present: list[tuple[str, dict]], methods_data: dict | None = 
     for mid, run in present:
         calc_tables = [b for b in _process_blocks(mid, run) if b["kind"] == "table"]
         entries.extend(zip(calculation_names[mid], calc_tables))
-        entries.append((f"{_METHOD_DISP[mid]}计算结果汇总", _result_table(run)))
+        entries.append((f"{_METHOD_DISP[mid]}计算结果汇总", _result_table(run, mid, methods_data)))
     return entries
 
 

@@ -109,21 +109,7 @@ _T95_BY_DOF = {
 }
 
 
-# ──────────────────────────────────────────────── rounding helpers
-
-def _sig(x, n=4):
-    """Round to n significant figures."""
-    if x is None:
-        return None
-    try:
-        x = float(x)
-    except (TypeError, ValueError):
-        return None
-    if x == 0 or not math.isfinite(x):
-        return x
-    digits = n - 1 - int(math.floor(math.log10(abs(x))))
-    return round(x, digits)
-
+# ──────────────────────────────────────────────── helpers
 
 def _mean(vals):
     return sum(vals) / len(vals)
@@ -313,11 +299,12 @@ def _calc_air_resonance(cols, p):
     err_abs = abs(v_exp - v_theory)
     err_rel = err_abs / v_theory * 100.0
     results = [
-        {"key": "v_exp", "label": "实验声速 v_exp", "value": _sig(v_exp), "unit": "m/s"},
-        {"key": "v_theory", "label": "理论声速（温度修正）", "value": _sig(v_theory), "unit": "m/s"},
-        {"key": "error_abs", "label": "绝对误差", "value": _sig(err_abs), "unit": "m/s"},
-        {"key": "error_rel", "label": "相对误差", "value": round(err_rel, 2), "unit": "%"},
-        {"key": "delta_l_mean", "label": "逐差平均间距 Δl", "value": round(dlm, 4), "unit": "mm"},
+        # 结果保留完整精度，位数由 core.precision 在展示时统一修约一次。
+        {"key": "v_exp", "label": "实验声速 v_exp", "value": v_exp, "unit": "m/s"},
+        {"key": "v_theory", "label": "理论声速（温度修正）", "value": v_theory, "unit": "m/s"},
+        {"key": "error_abs", "label": "绝对误差", "value": err_abs, "unit": "m/s"},
+        {"key": "error_rel", "label": "相对误差", "value": err_rel, "unit": "%"},
+        {"key": "delta_l_mean", "label": "逐差平均间距 Δl", "value": dlm, "unit": "mm"},
         {"key": "data_points", "label": "数据点数", "value": n, "unit": ""},
     ]
     s_dl = float(np.std(dl, ddof=1)) if len(dl) > 1 else 0.0
@@ -347,10 +334,10 @@ def _calc_water_phase(cols, p):
     ua_dl_m = ua_dl_mm * 1e-3                       # mm -> m
     ua_v = 2.0 * f_hz * ua_dl_m                     # v = f*(2*Δl_m)
     results = [
-        {"key": "v", "label": "水中声速 v", "value": _sig(v), "unit": "m/s"},
-        {"key": "delta_l_mean", "label": "逐差平均间距 Δl", "value": round(dlm, 4), "unit": "mm"},
-        {"key": "s_delta_l", "label": "Δl 标准差 s", "value": round(s_dl, 5), "unit": "mm"},
-        {"key": "u_a", "label": "A 类不确定度 U_A", "value": _sig(ua_v), "unit": "m/s"},
+        {"key": "v", "label": "水中声速 v", "value": v, "unit": "m/s"},
+        {"key": "delta_l_mean", "label": "逐差平均间距 Δl", "value": dlm, "unit": "mm"},
+        {"key": "s_delta_l", "label": "Δl 标准差 s", "value": s_dl, "unit": "mm"},
+        {"key": "u_a", "label": "A 类不确定度 U_A", "value": ua_v, "unit": "m/s"},
     ]
     b64 = _positions_fig(list(range(1, n + 1)), l, "水中相位法：匹配位置 l 随序号变化",
                          dlm, 2.0 * dlm,
@@ -474,13 +461,13 @@ def _calc_tof(cols, p):
     valid_points = len(L)
     excluded_points = len(dropped_rows)
     results = [
-        {"key": "v_fit", "label": "拟合声速 v（1000/a）", "value": _sig(v_fit), "unit": "m/s"},
-        {"key": "slope", "label": "拟合斜率 a", "value": round(slope, 6), "unit": "μs/mm"},
-        {"key": "intercept", "label": "拟合截距 b", "value": round(intercept, 4), "unit": "μs"},
-        {"key": "r2", "label": "拟合优度 R²", "value": _sig(r2, 5), "unit": ""},
-        {"key": "error_rel", "label": "与参考值相对偏差", "value": round(error_rel, 2), "unit": "%"},
-        {"key": "v_mean", "label": "逐点平均声速（诊断）", "value": _sig(v_mean), "unit": "m/s"},
-        {"key": "v_std", "label": "逐点速度标准差（诊断）", "value": _sig(v_std), "unit": "m/s"},
+        {"key": "v_fit", "label": "拟合声速 v（1000/a）", "value": v_fit, "unit": "m/s"},
+        {"key": "slope", "label": "拟合斜率 a", "value": slope, "unit": "μs/mm"},
+        {"key": "intercept", "label": "拟合截距 b", "value": intercept, "unit": "μs"},
+        {"key": "r2", "label": "拟合优度 R²", "value": r2, "unit": ""},
+        {"key": "error_rel", "label": "与参考值相对偏差", "value": error_rel, "unit": "%"},
+        {"key": "v_mean", "label": "逐点平均声速（诊断）", "value": v_mean, "unit": "m/s"},
+        {"key": "v_std", "label": "逐点速度标准差（诊断）", "value": v_std, "unit": "m/s"},
         {"key": "valid_points", "label": "有效点数", "value": valid_points, "unit": ""},
         {"key": "excluded_points", "label": "剔除点数", "value": excluded_points, "unit": ""},
     ]
@@ -519,13 +506,13 @@ def _calc_light_sine(cols, p, wave="正弦波"):
     err_abs = abs(c_exp - c_ref)
     err_rel = err_abs / c_ref * 100.0
     results = [
-        {"key": "c_exp", "label": "实验光速 c_exp", "value": _sig(c_exp), "unit": "m/s"},
-        {"key": "error_abs", "label": "绝对误差", "value": _sig(err_abs), "unit": "m/s"},
-        {"key": "error_rel", "label": "相对误差", "value": round(err_rel, 2), "unit": "%"},
-        {"key": "t_mean", "label": "差频周期均值 T", "value": round(tm, 3), "unit": "μs"},
-        {"key": "r_mean", "label": "Δx/Δt 的平均值", "value": round(r_mean, 3), "unit": "mm/μs"},
-        {"key": "delta_t_mean", "label": "相位差均值 Δt", "value": round(dtm, 3), "unit": "μs"},
-        {"key": "delta_x_mean", "label": "Δx 均值", "value": round(dxm, 1), "unit": "mm"},
+        {"key": "c_exp", "label": "实验光速 c_exp", "value": c_exp, "unit": "m/s"},
+        {"key": "error_abs", "label": "绝对误差", "value": err_abs, "unit": "m/s"},
+        {"key": "error_rel", "label": "相对误差", "value": err_rel, "unit": "%"},
+        {"key": "t_mean", "label": "差频周期均值 T", "value": tm, "unit": "μs"},
+        {"key": "r_mean", "label": "Δx/Δt 的平均值", "value": r_mean, "unit": "mm/μs"},
+        {"key": "delta_t_mean", "label": "相位差均值 Δt", "value": dtm, "unit": "μs"},
+        {"key": "delta_x_mean", "label": "Δx 均值", "value": dxm, "unit": "mm"},
     ]
     slope, intercept = None, 0.0
     if np.ptp(dt) > 1e-9:
@@ -552,10 +539,10 @@ def _calc_light_lissajous(cols, p):
     err_abs = abs(c_exp - c_ref)
     err_rel = err_abs / c_ref * 100.0
     results = [
-        {"key": "c_exp", "label": "实验光速 c_exp", "value": _sig(c_exp), "unit": "m/s"},
-        {"key": "error_abs", "label": "绝对误差", "value": _sig(err_abs), "unit": "m/s"},
-        {"key": "error_rel", "label": "相对误差", "value": round(err_rel, 2), "unit": "%"},
-        {"key": "delta_x_mean", "label": "Δx 均值", "value": round(dxm, 1), "unit": "mm"},
+        {"key": "c_exp", "label": "实验光速 c_exp", "value": c_exp, "unit": "m/s"},
+        {"key": "error_abs", "label": "绝对误差", "value": err_abs, "unit": "m/s"},
+        {"key": "error_rel", "label": "相对误差", "value": err_rel, "unit": "%"},
+        {"key": "delta_x_mean", "label": "Δx 均值", "value": dxm, "unit": "mm"},
     ]
     b64 = _light_lissajous_fig(dx, dxm)
     arrays = {"x1": x1, "x2": x2, "dx": dx, "dxm": dxm, "lam_mm": 4.0 * dxm,

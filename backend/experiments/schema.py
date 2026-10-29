@@ -22,7 +22,6 @@ class ExperimentField:
     type: str = "float"
     required: bool = True
     expected_range: tuple[float, float] | None = None
-    decimal_places: int | None = None
 
 
 @dataclass(frozen=True)
@@ -235,8 +234,8 @@ def _field_dict(experiment_id: str, method_id: str, field: dict[str, Any], *, re
     item.setdefault("type", _infer_type(str(item.get("key", "")), str(item.get("label", ""))))
     item.setdefault("required", required)
     item.setdefault("expected_range", list(_infer_range(experiment_id, method_id, item)))
-    if "decimal_places" not in item:
-        item["decimal_places"] = 0 if item["type"] == "integer" else 3
+    # 不注入 decimal_places：读数该写几位由仪器分度与记录纸决定，
+    # 统一写死 3 位会把 4 位估读砍掉、也会给整数补零（见 docs/artifact-format.md）。
     return item
 
 
@@ -253,7 +252,6 @@ def enrich_config(raw: dict[str, Any]) -> dict[str, Any]:
     config.setdefault("validation", {
         "expectedRangeIsWarning": True,
         "finiteNumbers": True,
-        "decimalPlacesAreWarning": True,
     })
     for method in config.get("methods", []):
         method.setdefault("tableId", method.get("id", ""))
@@ -386,13 +384,6 @@ def validate_payload(config: dict[str, Any], data: dict[str, Any]) -> dict[str, 
                     warnings.append(asdict(ExperimentValidationIssue(
                         method_id, key, row_index, "warning", "expected_range",
                         f"{method['name']}：第 {row_index + 1} 行{field.get('label', key)}={value} 超出常见范围 {expected[0]}–{expected[1]}，请核对原始记录")))
-                places = field.get("decimal_places")
-                if places is not None and isinstance(value, str) and "." in value:
-                    actual = len(value.split(".", 1)[1])
-                    if actual > places:
-                        warnings.append(asdict(ExperimentValidationIssue(
-                            method_id, key, row_index, "warning", "decimal_places",
-                            f"{method['name']}：第 {row_index + 1} 行{field.get('label', key)}建议保留不超过 {places} 位小数")))
         for field in method.get("params", []):
             key = field["key"]
             value = (payload.get("params") or {}).get(key)
