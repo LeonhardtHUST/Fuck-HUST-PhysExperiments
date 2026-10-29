@@ -61,6 +61,23 @@ python -m ocr_dataset.templates --check                        # 必须通过
 - 合并逻辑集中在 `mergeArtifactNotes`（`frontend/src/lib/artifact-scope.ts`），改动导入语义时同步补 `frontend/tests/experiment-artifact.test.ts`。
 - `schemaVersion` 必须为 `1`；`experiment.id` 必须与当前工作台一致，否则拒绝导入。
 
+### 原始读数只搬运，派生量按规则修约
+
+有效数字是实验数据的一部分：`1.20` 与 `1.2` 不是同一个精度，`0.000100` 与 `0.0001` 也不同。
+链路分两半，谁都不许越界：
+
+- **原始读数**：artifact / 读数 JSON 的数值列一律写字符串（`encodeCell`，见 `frontend/src/lib/experiment-artifact.ts`）；
+  报告请求额外带原样字符串 `rows_raw` / `params_raw`（通用、声光）与每行 `raw`（偏振光），
+  与数字字段来自**同一个 trim 后的数组**，禁止从数字反推字符串。
+- **原始数据表**只读 raw：`documents.raw_cell` / `docbuild._cell` / `soundlight.docs._raw_col`；
+  raw 缺失才回落到数字格式化，且回落时不做固定小数位重排。
+- **派生量**统一走 `backend/experiments/core/precision.py` 的 `format_result`（规则表 + 全局键名 + 列继承）；
+  适配器、引擎里**不要**再 `round()` 结果，否则就是双重修约。
+- 新增结果键后跑 `cd backend && python -m experiments.core.precision --audit`，
+  落到 `default:sig4` 的会被点名，需要显式补规则。
+- `decimal_places` 已从 config 契约移除（`experiments/schema.py`）：不要恢复「建议保留不超过 N 位小数」，
+  那会把学生真实的 4 位估读劝成 3 位。
+
 ### 表格行数是动态的
 
 数据表支持自由增删行，校验按配置里的最小行数放行（见提交 `19d8054`、`ead6561`）。不要在新代码里假设固定行数或按空行截断。
