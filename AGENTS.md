@@ -297,6 +297,26 @@ vinext 只给「**已经存在**于 `process.env` 的 `NEXT_PUBLIC_*`」生成 d
 - **`chrome --headless --screenshot` / `msedge --dump-dom` 在代理会话里可能静默失败**（连 `--version` 都没有输出）。此时连本机已开的 Edge 更稳：找 `--remote-debugging-port`（本机常用 `9333`），`curl http://127.0.0.1:9333/json/version` 确认后 `chromium.connectOverCDP("http://127.0.0.1:9333")`，**只 `context.newPage()` 开新标签页、用完 `page.close()`**，别碰用户已有标签页。
 - 临时脚本放 `.dev-logs/`（已忽略），收尾连同截图一起删。
 
+### 25. 改名要分「工程标识」与「用户可见」两层，禁止全量替换
+
+仓库与工程标识是 `NMSL-HUST-PhysExp`，用户可见的产品名是 `PhysExp Killer`。全量 sed 会踩三类雷：
+
+- **协议 / 外部契约绝不能跟着改**：`physlab_mcp` 包名（34 处 import）、`SERVER_NAME="physlab"`、`physicslab-api`（`backend/tests/test_api_contract.py:62` 的断言 + Cloud Run 服务名 + Actions variable `NEXT_PUBLIC_API_URL` 的指向）、`PhysicsLabContainer` / `PHYSICSLAB_CONTAINER`（Durable Object 类名，`cloudflare/wrangler.jsonc` 的 migration tag 已固化，改类名必须新增 migration）、`PHYSICSLAB_*` 环境变量、`PhysLab_OCR` 与 `physlab_ocr_dataset.zip`（外部训练仓库的兼容契约，见 `backend/ocr_dataset/builder.py` 的 `compatible_with`）、JSONC 的 `"kind": "physlab.report"`。
+- **localStorage key 不跟着改**：`physlab:draft:v1:`、`physlab:data-collection-consent:v1`、`physlab:admin-key`、`physicslab-anonymous-session` 一改，用户已存草稿与「不再询问」决定全部失效。前缀与品牌不一致不是 bug。
+- **改了产出就要改断言**：JSONC 报告头在 `backend/experiments/core/report_export.py`，`backend/tests/test_report_export.py` 与 `backend/tests/test_mcp_tools.py` 都断言了这段字面量，只改产出不改断言必红。
+
+仓库改名（GitHub）的连带影响：
+
+- Pages 的 basePath 直接取 `github.event.repository.name`（`.github/workflows/deploy-pages.yml`），仓库一改名，线上地址从 `/<旧名>/` 变成 `/<新名>/`。**旧深链与分享链接全部 404**——GitHub 只重定向仓库页，不重定向 Pages 的资源路径。
+- `git remote set-url origin <新地址>` 要手动做；旧地址虽有 301，但推上去的是旧命名。
+- 地址栏里的仓库名对用户始终可见，界面改名管不到 URL；要彻底不露出，只能挂自定义域名，或改用 CloudBase / Cloudflare Pages 的根路径部署。
+
+本地目录改名（`D:/Projects/GitHub/<repo>`）：
+
+- `.venv` 的 `pyvenv.cfg` / `Scripts/*.exe` 与 `node_modules/.bin` 的 shim 都带绝对路径，改名后大概率要重建：`python -m venv .venv` + `pip install -r backend/requirements.txt`、`npm ci`。
+- `docs/mcp.md` 的 5 处本机绝对路径、以及用户自己 `mcp.json` 里的 `command` / `args` 都要跟着改，否则 MCP 客户端拉不起服务。
+- 改名会让当前代理会话的工作区指针失效，**放到最后做**，之后一律用新绝对路径。
+
 ## 提交习惯
 
 - 提交信息用中文 Conventional Commits，scope 取模块名：`feat(workspace): ...`、`fix(gmr): ...`、`docs(readme): ...`。
