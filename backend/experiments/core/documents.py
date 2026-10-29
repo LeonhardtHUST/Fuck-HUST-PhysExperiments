@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 
+from experiments.core.precision import format_result
 from experiments.polarization import docbuild
 from experiments.report_layout import four_section_report, latex
 
@@ -18,14 +19,39 @@ def safe_text(value: str) -> str:
 
 
 def fmt(value) -> str:
+    """单元格文本：字符串原样透传，数字只做最短往返表示。
+
+    原始读数以字符串形式到达（见 ``rows_raw`` 通道），这里绝不再按固定小数位重排——
+    固定 6 位会把 12.3456789 截成 12.345679，也会把 1.2 写成 1.200000。
+    """
     if value is None or value == "": return ""
-    if isinstance(value, str): return safe_text(value)
+    if isinstance(value, str): return safe_text(value.strip())
     try:
         number=float(value)
-        if not math.isfinite(number): return "—"
-        if abs(number) >= 1e5 or (number and abs(number) < 1e-4): return f"{number:.6e}"
-        return f"{number:.6f}".rstrip("0").rstrip(".")
-    except (TypeError, ValueError): return str(value)
+    except (TypeError, ValueError): return safe_text(str(value))
+    if not math.isfinite(number): return "—"
+    return safe_text(repr(number))
+
+
+def raw_cell(payload: dict, index: int, key: str, fallback) -> str:
+    """优先取前端送来的原样字符串；缺失时（旧请求、纯数字调用）回落到数字格式化。"""
+    raw_rows = payload.get("rows_raw")
+    if isinstance(raw_rows, list) and 0 <= index < len(raw_rows):
+        row = raw_rows[index]
+        if isinstance(row, dict):
+            text = row.get(key)
+            if isinstance(text, str) and text.strip():
+                return safe_text(text.strip())
+    return fmt(fallback)
+
+
+def raw_param(payload: dict, key: str, fallback) -> str:
+    params_raw = payload.get("params_raw")
+    if isinstance(params_raw, dict):
+        text = params_raw.get(key)
+        if isinstance(text, str) and text.strip():
+            return safe_text(text.strip())
+    return fmt(fallback)
 
 
 def _table(rows: list[list], columns: int, font: float = 8.2,
@@ -60,7 +86,7 @@ def _method_raw_table(method: dict, payload: dict, blank: bool = False) -> dict:
             if blank and value=="":
                 prefill=method.get("prefill",{}).get(col["key"],[])
                 value=prefill[idx] if idx<len(prefill) else ""
-            row.append(value)
+            row.append(value if blank else raw_cell(payload, idx, col["key"], value))
         rows.append(row)
     if len(rows) > 31 and len(columns) <= 3:
         rows = _fold_rows(rows, target_rows=30)
@@ -114,15 +140,25 @@ def record_bytes(experiment, fmt: str) -> bytes:
     return docbuild.render_docx(blocks,landscape=False,cn="宋体",cn_en="宋体") if fmt=="docx" else docbuild.render_pdf(blocks,landscape=False,cn_pref="msyh")
 
 
-def _result_table(method: dict, values: dict) -> dict:
+def _result_table(method: dict, values: dict, experiment_id: str, source_rows=None) -> dict:
     rows=[["结果量","数值","单位"]]
-    for field in method.get("results",[]): rows.append([field["label"],values.get(field["key"]),field.get("unit","")])
+    for field in method.get("results",[]):
+        key=field["key"]
+        text=format_result(values.get(key), experiment_id, method["id"], key,
+                           unit=field.get("unit") or None,
+                           rows=source_rows, columns=method.get("columns"))
+        rows.append([field["label"],text,field.get("unit","")])
     return _table(rows,3)
 
 
-def _derived_table(rows: list[dict]) -> dict | None:
+def _derived_table(rows: list[dict], experiment_id: str, method: dict, source_rows=None) -> dict | None:
     if not rows: return None
-    keys=list(rows[0].keys()); table_rows=[keys]+[[row.get(key,"") for key in keys] for row in rows]
+    keys=list(rows[0].keys())
+    table_rows=[keys]+[
+        [format_result(row.get(key), experiment_id, method["id"], key,
+                       rows=source_rows, columns=method.get("columns")) for key in keys]
+        for row in rows
+    ]
     if len(table_rows)>25 and len(keys)<=3: table_rows=_fold_rows(table_rows)
     return _table(table_rows,len(table_rows[0]),7.2 if len(table_rows[0])>6 else 8)
 
@@ -142,21 +178,28 @@ def report_blocks(experiment, data: dict) -> list[dict]:
     for method_id,result in run["results"].items():
         method=methods[method_id]; payload=data.get(method_id,{})
         if method.get("params"):
-            tables.append((safe_text(f"{method['name']}参数"),_table([[p["label"] for p in method["params"]],[fmt(payload.get("params",{}).get(p["key"],p.get("default",""))) for p in method["params"]]],len(method["params"]))))
+            tables.append((safe_text(f"{method['name']}参数"),_table([[p["label"] for p in method["params"]],[raw_param(payload, p["key"], payload.get("params",{}).get(p["key"],p.get("default",""))) for p in method["params"]]],len(method["params"]))))
         tables.append((safe_text(f"{method['name']}原始数据"),_method_raw_table(method,payload)))
         detail_rows=run["derived"].get(method_id,[])
-        detail=_derived_table(detail_rows)
+        source_rows=payload.get("rows_raw") or payload.get("rows")
+        detail=_derived_table(detail_rows, experiment.id, method, source_rows)
         if detail: tables.append((safe_text(f"{method['name']}计算明细"),detail))
-        tables.append((safe_text(f"{method['name']}结果汇总"),_result_table(method,result)))
+        tables.append((safe_text(f"{method['name']}结果汇总"),_result_table(method,result,experiment.id,source_rows)))
         if method_id in run["plots"]:
             figures.append((safe_text(method["name"]),{"b64":run["plots"][method_id],"width_cm":12.5}))
         analysis.append({"kind":"h3","text":safe_text(method["name"])})
         analysis.append({"kind":"para","text":safe_text(method["description"]+"。先筛除空白行并统一到公式所示单位，再计算明细表和汇总结果。")})
         for formula in experiment.formulas.get(method_id,[]): analysis.append(latex(formula))
         for row_index, row in enumerate(detail_rows, start=1):
-            substitutions="，".join(f"{key}={fmt(value)}" for key,value in row.items())
+            substitutions="，".join(
+                f"{key}={format_result(value, experiment.id, method_id, key, rows=source_rows, columns=method.get('columns'))}"
+                for key,value in row.items()
+            )
             analysis.append({"kind":"note","text":safe_text(f"第 {row_index} 组逐点代入：{substitutions}。")})
-        rendered="；".join(f"{field['label']}={fmt(result.get(field['key']))} {field.get('unit','')}" for field in method.get("results",[]))
+        rendered="；".join(
+            f"{field['label']}={format_result(result.get(field['key']), experiment.id, method_id, field['key'], unit=field.get('unit') or None, rows=source_rows, columns=method.get('columns'))} {field.get('unit','')}"
+            for field in method.get("results",[])
+        )
         analysis.append({"kind":"para","text":safe_text("本组数据代入后："+rendered+"。完整逐点中间量见第一部分对应计算明细表。")})
         analysis.extend(experiment.report_analysis(method_id, result))
     discussion=config["discussion"]

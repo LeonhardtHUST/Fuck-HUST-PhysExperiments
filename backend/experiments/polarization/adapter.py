@@ -148,15 +148,15 @@ class PolarizationAdapter:
             'cos2': cos2, 'slope': slope, 'intercept': intercept,
             'r_squared': r_value ** 2,
             'summary': {
-                'slope': round(float(slope), 4),
-                'intercept': round(float(intercept), 4),
-                'r_squared': round(float(r_value ** 2), 6),
-                'I_max': round(I_max, 4),
-                'I_min': round(I_min, 4),
-                'extinction_ratio': round(ext_ratio, 1),
-                'degree_of_polarization': round(DoP, 6),
-                'slope_raw': round(float(slope_raw), 4),
-                'r_squared_raw': round(float(r_raw), 6),
+                'slope': float(slope),
+                'intercept': float(intercept),
+                'r_squared': float(r_value ** 2),
+                'I_max': I_max,
+                'I_min': I_min,
+                'extinction_ratio': ext_ratio,
+                'degree_of_polarization': DoP,
+                'slope_raw': float(slope_raw),
+                'r_squared_raw': float(r_raw),
                 'data_points': int(valid.sum()),
             }
         }
@@ -241,13 +241,13 @@ class PolarizationAdapter:
             'theory_2dc': theory_2dc, 'errors': errors, 'rel_errors': rel_errors,
             'slope': slope, 'intercept': intercept, 'r_squared': r_value ** 2,
             'summary': {
-                'slope': round(float(slope), 4),
-                'intercept': round(float(intercept), 4),
-                'r_squared': round(float(r_value ** 2), 6),
+                'slope': float(slope),
+                'intercept': float(intercept),
+                'r_squared': float(r_value ** 2),
                 'theory_slope': 2.0,
-                'slope_deviation_pct': round(abs(float(slope) - 2) / 2 * 100, 2),
+                'slope_deviation_pct': abs(float(slope) - 2) / 2 * 100,
                 'data_points': len(offsets),
-                'max_abs_error': round(float(np.nanmax(np.abs(errors))), 2),
+                'max_abs_error': float(np.nanmax(np.abs(errors))),
             }
         }
 
@@ -325,23 +325,23 @@ class PolarizationAdapter:
 
         summary = {
             'theta_qwp': self.theta_qwp,
-            'I_max_exp': round(I_max_exp, 4),
-            'I_min_exp': round(I_min_exp, 4),
-            'ratio_exp': round(ratio_exp, 4),
-            'A_from_max': round(A_from_max, 4),
-            'A_from_min': round(A_from_min, 4),
-            'A_avg': round(A_avg, 4),
-            'Imax_theory': round(Imax_theory, 4),
-            'Imin_theory': round(Imin_theory, 4),
-            'ratio_theory': round(ratio_theory, 4),
-            'relative_diff_pct': round(rel_diff, 2),
+            'I_max_exp': I_max_exp,
+            'I_min_exp': I_min_exp,
+            'ratio_exp': ratio_exp,
+            'A_from_max': A_from_max,
+            'A_from_min': A_from_min,
+            'A_avg': A_avg,
+            'Imax_theory': Imax_theory,
+            'Imin_theory': Imin_theory,
+            'ratio_theory': ratio_theory,
+            'relative_diff_pct': rel_diff,
             'data_points': int(valid.sum()),
         }
         if A_fit is not None:
-            summary['A_nl_fit'] = round(float(A_fit), 4)
-            summary['theta_nl_fit'] = round(float(theta_fit), 2)
-            summary['A_nl_err'] = round(float(perr[0]), 4)
-            summary['theta_nl_err'] = round(float(perr[1]), 2)
+            summary['A_nl_fit'] = float(A_fit)
+            summary['theta_nl_fit'] = float(theta_fit)
+            summary['A_nl_err'] = float(perr[0])
+            summary['theta_nl_err'] = float(perr[1])
 
         return {
             'phis': phis, 'I_use': I_use, 'I_corr': I_corr,
@@ -408,12 +408,12 @@ class PolarizationAdapter:
             'angles': angles, 'I_use': I_use, 'I_corr': I_corr,
             'I_mean': I_mean, 'I_max': I_max, 'I_min': I_min,
             'summary': {
-                'I_mean': round(I_mean, 4),
-                'I_max': round(I_max, 4),
-                'I_min': round(I_min, 4),
-                'ratio': round(ratio, 4),
-                'std_dev': round(I_std, 4),
-                'cv_pct': round(cv, 2),
+                'I_mean': I_mean,
+                'I_max': I_max,
+                'I_min': I_min,
+                'ratio': ratio,
+                'std_dev': I_std,
+                'cv_pct': cv,
                 'data_points': int(valid.sum()),
             }
         }

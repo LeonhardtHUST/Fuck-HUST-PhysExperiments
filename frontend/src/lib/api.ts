@@ -17,10 +17,17 @@ async function failureMessage(res: Response): Promise<string> {
   }
 }
 
+/**
+ * 原始读数的原样字符串。计算用上面的 number 字段，
+ * 报告里的原始数据表用这里的文本，末尾 0 与科学计数法才不会丢。
+ */
+export type RawCells = Record<string, string>;
+
 export interface MalusRow {
   theta: number;
   i_left: number | null;
   i_right: number | null;
+  raw?: RawCells;
 }
 
 export interface HalfWaveInitial {
@@ -28,6 +35,7 @@ export interface HalfWaveInitial {
   c_min: number;
   p2_deg: number | null;
   p2_min: number;
+  raw?: RawCells;
 }
 
 export interface HalfWaveRow {
@@ -36,21 +44,26 @@ export interface HalfWaveRow {
   c_min: number;
   p2_deg: number | null;
   p2_min: number;
+  raw?: RawCells;
 }
 
 export interface QuarterWaveRow {
   phi: number;
   i_raw: number | null;
+  raw?: RawCells;
 }
 
 export interface CircularRow {
   angle: number;
   i_raw: number | null;
+  raw?: RawCells;
 }
 
 export interface ProcessRequest {
   bg_uw: number;
   theta_qwp: number;
+  bg_uw_raw?: string;
+  theta_qwp_raw?: string;
   malus?: { rows: MalusRow[] };
   halfwave?: { initial: HalfWaveInitial; rows: HalfWaveRow[] };
   quarterwave?: { rows: QuarterWaveRow[] };
@@ -406,7 +419,13 @@ export async function processSoundLight(
 
 export type SoundLightMethodData = Record<
   string,
-  { rows: Record<string, (number | null)[]>; params: Record<string, number> }
+  {
+    rows: Record<string, (number | null)[]>;
+    params: Record<string, number>;
+    /** 原样字符串通道：只用于报告里的原始数据表 */
+    rows_raw?: Record<string, string[]>;
+    params_raw?: Record<string, string>;
+  }
 >;
 
 export async function downloadSoundLightReport(
@@ -443,7 +462,6 @@ export interface GenericColumn {
   type?: "integer" | "float";
   required?: boolean;
   expected_range?: [number, number];
-  decimal_places?: number;
   /** 现场实测参数的填写说明（空白记录表同样以浅灰小字印出） */
   hint?: string;
 }
@@ -486,7 +504,13 @@ export interface GenericExperimentConfig {
 
 export type GenericExperimentData = Record<
   string,
-  { rows: Record<string, number | null>[]; params: Record<string, number> }
+  {
+    rows: Record<string, number | null>[];
+    params: Record<string, number>;
+    /** 原样字符串通道：只用于报告里的原始数据表与参数表 */
+    rows_raw?: Record<string, string>[];
+    params_raw?: Record<string, string>;
+  }
 >;
 
 export interface GenericProcessResponse {

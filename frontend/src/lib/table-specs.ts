@@ -34,7 +34,6 @@ export interface TableColumnSpec {
   kind: "number" | "text";
   range?: ColumnRange;
   rowIndex?: RowIndexRule;
-  decimals?: number;
   hint?: string;
 }
 
@@ -92,7 +91,6 @@ interface RawColumn {
   unit?: string;
   type?: string;
   expected_range?: [number, number];
-  decimal_places?: number;
   hint?: string;
 }
 
@@ -151,7 +149,6 @@ function buildColumn(
     kind: column.type === "text" ? "text" : "number",
   };
   if (explicit) spec.range = explicit;
-  if (column.decimal_places !== undefined) spec.decimals = column.decimal_places;
   if (column.hint) spec.hint = column.hint;
   return spec;
 }

@@ -364,8 +364,11 @@ export default function OcrTableImporter({
                           )}
                           <input
                             id={`${tableId}-ocr-${index}`}
-                            type="number"
-                            step="any"
+                            // text 而非 number：识别结果要能原样保留 "1.20"、"1.20e-3" 与待补的 "-"
+                            type="text"
+                            inputMode="text"
+                            autoComplete="off"
+                            spellCheck={false}
                             value={cell.value}
                             title={cell.rawText ? `模型原文：${cell.rawText}` : "未识别"}
                             onChange={(event) => setCells((previous) => previous.map((item, itemIndex) =>

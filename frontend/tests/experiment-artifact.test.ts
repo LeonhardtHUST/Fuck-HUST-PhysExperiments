@@ -156,7 +156,8 @@ test("artifact round-trips numbers, params and remarks", () => {
   assert.equal(encodeArtifact(michelson, { tables: { [table.tableId]: { rows: [] } } }).includes('"schemaVersion": 1'), true);
   const strict = JSON.parse(encoded);
   assert.equal(strict.experiment.id, michelson.id);
-  assert.equal(strict.tables[table.tableId].rows[0][keyA], 12.345);
+  // 数值单元格一律是字符串：数字会丢末尾 0
+  assert.equal(strict.tables[table.tableId].rows[0][keyA], "12.345");
 
   const decoded = decodeArtifact(michelson, encoded);
   assert.equal(decoded.ok, true);
@@ -167,6 +168,50 @@ test("artifact round-trips numbers, params and remarks", () => {
   assert.ok(imported!.remarks);
   assert.equal(imported!.remarks!.issues?.[0].severity, "warning");
   assert.equal(imported!.remarks!.issues?.[0].row, 2);
+});
+
+test("significand text survives export and re-import verbatim", () => {
+  const table = michelson.tables[0];
+  const key = table.columns[table.columns.length - 1].key;
+  const samples = ["1.20", "0.000100", "1.20e-3", "12.3456789", "-0.030"];
+  const artifact = buildArtifact(michelson, {
+    tables: { [table.tableId]: { rows: samples.map((value) => ({ [key]: value })) } },
+  });
+  const encoded = JSON.stringify(artifact, null, 2);
+  for (const sample of samples) {
+    assert.ok(encoded.includes(`"${sample}"`), `${sample} 未被原样写出`);
+  }
+  const decoded = decodeArtifact(michelson, encoded);
+  assert.equal(decoded.ok, true);
+  if (!decoded.ok) return;
+  assert.deepEqual(decoded.tables[0].rows.map((row) => row[key]), samples);
+});
+
+test("one column may keep different decimal places", () => {
+  const table = michelson.tables[0];
+  const key = table.columns[table.columns.length - 1].key;
+  const values = ["1.20", "1.2", "1.200"];
+  const artifact = buildArtifact(michelson, {
+    tables: { [table.tableId]: { rows: values.map((value) => ({ [key]: value })) } },
+  });
+  const decoded = decodeArtifact(michelson, JSON.stringify(artifact));
+  assert.equal(decoded.ok, true);
+  if (!decoded.ok) return;
+  assert.deepEqual(decoded.tables[0].rows.map((row) => row[key]), values);
+});
+
+test("legacy numeric artifacts still import", () => {
+  const table = michelson.tables[0];
+  const key = table.columns[table.columns.length - 1].key;
+  const text = JSON.stringify({
+    schemaVersion: 1,
+    experiment: { id: michelson.id },
+    tables: { [table.tableId]: { rows: [{ [key]: 1.5 }] } },
+  });
+  const decoded = decodeArtifact(michelson, text);
+  assert.equal(decoded.ok, true);
+  if (!decoded.ok) return;
+  assert.equal(decoded.tables[0].rows[0][key], "1.5");
 });
 
 test("import tolerates JSONC fences, trailing commas and unknown fields", () => {
@@ -248,7 +293,7 @@ test("backend computed values are ignored, ai values are kept", () => {
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(result.computed[backendKey], undefined);
-  assert.equal(result.computed["custom.delta"].value, 4.2);
+  assert.equal(result.computed["custom.delta"].value, "4.2");
   assert.equal(result.warnings.some((warning) => warning.includes(backendKey)), true);
 });
 
@@ -322,6 +367,19 @@ test("electronic prompt drops the photo-only constraints", () => {
   for (const table of michelson.tables) assert.equal(prompt.includes(table.tableId), true);
   assert.equal(prompt.includes("```jsonc"), true);
   assert.equal(prompt.includes("## 十、JSONC 模板（填写目标）"), true);
+});
+
+test("schema and both prompt variants demand string readouts", () => {
+  const schema = buildExperimentSchemaJsonc(michelson);
+  assert.equal(schema.includes('示例 {"fringe_count":"1.20"}'), true);
+  assert.equal(schema.includes("数值一律写成字符串"), true);
+
+  for (const source of ["photo", "electronic"] as const) {
+    const prompt = buildPrompt(michelson, undefined, { source });
+    assert.equal(prompt.includes("写成字符串"), true, `${source}: 缺少字符串要求`);
+    assert.equal(prompt.includes("末尾 0"), true, `${source}: 缺少末尾 0 要求`);
+    assert.equal(prompt.includes("统一成相同位数"), true, `${source}: 缺少「不要统一位数」`);
+  }
 });
 
 test("the two prompt variants differ but stay deterministic", () => {

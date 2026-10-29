@@ -1,10 +1,11 @@
 /**
  * Local draft persistence for the experiment workspaces.
  *
- * Unlike `experiment-artifact.ts` (which trims trailing empty rows and turns
- * numbers into JSON numbers for export), a draft stores exactly what is on the
- * screen: half-typed strings such as `-` / `1e`, extra blank rows and the
- * imported remarks. One key per experiment:
+ * Unlike `experiment-artifact.ts` (which trims trailing empty rows and re-shapes
+ * cells for export), a draft stores exactly what is on the screen: half-typed
+ * strings such as `-` / `1e`, extra blank rows and the imported remarks.
+ * Both paths keep measurement cells as strings — 有效数字属于数据本身。
+ * One key per experiment:
  *
  *     physlab:draft:v1:<experimentId>
  *

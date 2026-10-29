@@ -40,7 +40,7 @@ import DataInputTable from "@/components/workspace/DataInputTable";
 import ArtifactActions, { type OcrTarget } from "@/components/workspace/ArtifactActions";
 import { applyOcrValues, editableCellCount } from "@/lib/ocr-apply";
 import ArtifactRemarks from "@/components/workspace/ArtifactRemarks";
-import { rowIndexValue } from "@/lib/table-specs";
+import { applyImportedRow, recordsToGrid as importedRowsToGrid } from "@/lib/polarization-grid";
 import { getExperimentSpec } from "@/lib/experiment-specs";
 import type { ArtifactInput } from "@/lib/experiment-artifact";
 import {
@@ -119,16 +119,11 @@ function gridToRecords(tableId: string, grid: string[][]): Record<string, string
   );
 }
 
-/** 只读角度列按行序重建，与导入/增行的规则一致。 */
+/** 只读角度列：文件里有实测值就用实测值，缺失才按行序补（见 polarization-grid.ts）。 */
 function recordsToGrid(tableId: string, records: Record<string, string>[]): string[][] {
   const table = POLARIZATION_SPEC.tables.find((item) => item.tableId === tableId);
   if (!table) return [];
-  return records.map((record, rowIndex) =>
-    table.columns.map((column) => {
-      const derived = rowIndexValue(column, rowIndex);
-      return derived !== undefined ? String(derived) : (record[column.key] ?? "");
-    })
-  );
+  return importedRowsToGrid(table, records);
 }
 
 function numberOrNull(value: string): number | null {
@@ -202,11 +197,15 @@ function PolarizationWorkspace({
     return {
       bg_uw: parseFloat(bgUw) || 0,
       theta_qwp: numberOrNull(thetaQwp) ?? 30,
+      // raw 是给报告原始数据表用的原样字符串：计算仍走上面的 number 字段
+      bg_uw_raw: bgUw.trim(),
+      theta_qwp_raw: thetaQwp.trim(),
       malus: {
         rows: malusRows.map((r) => ({
           theta: parseFloat(r[0]) || 0,
           i_left: r[1] ? parseFloat(r[1]) : null,
           i_right: r[2] ? parseFloat(r[2]) : null,
+          raw: { theta: (r[0] ?? "").trim(), i_left: (r[1] ?? "").trim(), i_right: (r[2] ?? "").trim() },
         })),
       },
       halfwave: {
@@ -215,6 +214,12 @@ function PolarizationWorkspace({
           c_min: parseFloat(hwInit.c_min) || 0,
           p2_deg: numberOrNull(hwInit.p2_deg),
           p2_min: parseFloat(hwInit.p2_min) || 0,
+          raw: {
+            c_deg: hwInit.c_deg.trim(),
+            c_min: hwInit.c_min.trim(),
+            p2_deg: hwInit.p2_deg.trim(),
+            p2_min: hwInit.p2_min.trim(),
+          },
         },
         rows: hwRows.map((r) => ({
           offset: parseFloat(r[0]) || 0,
@@ -222,18 +227,27 @@ function PolarizationWorkspace({
           c_min: parseFloat(r[2]) || 0,
           p2_deg: numberOrNull(r[3]),
           p2_min: parseFloat(r[4]) || 0,
+          raw: {
+            offset: (r[0] ?? "").trim(),
+            c_deg: (r[1] ?? "").trim(),
+            c_min: (r[2] ?? "").trim(),
+            p2_deg: (r[3] ?? "").trim(),
+            p2_min: (r[4] ?? "").trim(),
+          },
         })),
       },
       quarterwave: {
         rows: qwRows.map((r) => ({
           phi: parseFloat(r[0]) || 0,
           i_raw: r[1] ? parseFloat(r[1]) : null,
+          raw: { phi: (r[0] ?? "").trim(), i_raw: (r[1] ?? "").trim() },
         })),
       },
       circular: {
         rows: circRows.map((r) => ({
           angle: parseFloat(r[0]) || 0,
           i_raw: r[1] ? parseFloat(r[1]) : null,
+          raw: { angle: (r[0] ?? "").trim(), i_raw: (r[1] ?? "").trim() },
         })),
       },
     };
@@ -295,12 +309,9 @@ function PolarizationWorkspace({
       const rowCount = Math.max(table.rows.length, specTable.minRows);
       const next = Array.from({ length: rowCount }, (_, rowIndex) => {
         const imported = table.rows[rowIndex] ?? {};
-        return specTable.columns.map((column) => {
-          const derived = rowIndexValue(column, rowIndex);
-          if (derived !== undefined) return String(derived);
-          const value = imported[column.key];
-          return value === null || value === undefined ? "" : String(value);
-        });
+        return specTable.columns.map((column) =>
+          applyImportedRow(column, imported[column.key], rowIndex)
+        );
       });
       if (table.tableId === "malus") setMalusData(next);
       else if (table.tableId === "halfwave") setHwData(next);
@@ -729,8 +740,10 @@ function PolarizationWorkspace({
                   <span className="text-[10px] font-medium text-amber-600">{rangeLabel(getInputRange("polarization", "setup", "bg_uw"), "μW")}</span>
                   <span className="relative inline-flex items-center">
                     <input
-                      type="number"
-                      step="any"
+                      type="text"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      spellCheck={false}
                       value={bgUw}
                       onChange={(e) => setBgUw(e.target.value)}
                       onWheel={(e) => e.currentTarget.blur()}
@@ -747,9 +760,10 @@ function PolarizationWorkspace({
                   <span className="text-[10px] font-medium text-amber-600">{rangeLabel(getInputRange("polarization", "setup", "theta_qwp"), "°")}</span>
                   <span className="relative inline-flex items-center">
                     <input
-                      type="number"
-                      step="any"
+                      type="text"
                       inputMode="decimal"
+                      autoComplete="off"
+                      spellCheck={false}
                       value={thetaQwp}
                       onChange={(e) => setThetaQwp(e.target.value)}
                       onWheel={(e) => e.currentTarget.blur()}
@@ -851,7 +865,10 @@ function PolarizationWorkspace({
                         <span className="text-xs font-medium text-stone-400">{f.label}</span>
                         <span className="text-[10px] font-medium text-amber-600">{rangeLabel(range, unit)}</span>
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
+                          autoComplete="off"
+                          spellCheck={false}
                           value={hwInit[f.key as keyof typeof hwInit]}
                           onChange={(e) =>
                             setHwInit((prev) => ({ ...prev, [f.key]: e.target.value }))

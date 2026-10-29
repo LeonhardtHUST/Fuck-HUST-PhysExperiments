@@ -14,6 +14,8 @@ class MalusRow(BaseModel):
     theta: float
     i_left: Optional[float] = None
     i_right: Optional[float] = None
+    #: 原始读数的原样字符串（{"theta": "90.0", "i_left": "1.20"}），只用于报告里的原始数据表
+    raw: Optional[Dict[str, str]] = None
 
 
 class MalusData(BaseModel):
@@ -25,6 +27,7 @@ class HalfWaveInitial(BaseModel):
     c_min: float = 0.0
     p2_deg: Optional[float] = None
     p2_min: float = 0.0
+    raw: Optional[Dict[str, str]] = None
 
 
 class HalfWaveRow(BaseModel):
@@ -33,6 +36,7 @@ class HalfWaveRow(BaseModel):
     c_min: float = 0.0
     p2_deg: Optional[float] = None
     p2_min: float = 0.0
+    raw: Optional[Dict[str, str]] = None
 
 
 class HalfWaveData(BaseModel):
@@ -43,6 +47,7 @@ class HalfWaveData(BaseModel):
 class QuarterWaveRow(BaseModel):
     phi: float
     i_raw: Optional[float] = None
+    raw: Optional[Dict[str, str]] = None
 
 
 class QuarterWaveData(BaseModel):
@@ -52,6 +57,7 @@ class QuarterWaveData(BaseModel):
 class CircularRow(BaseModel):
     angle: float
     i_raw: Optional[float] = None
+    raw: Optional[Dict[str, str]] = None
 
 
 class CircularData(BaseModel):
@@ -61,6 +67,8 @@ class CircularData(BaseModel):
 class ProcessRequest(BaseModel):
     bg_uw: float = 0.0
     theta_qwp: float = 30.0
+    bg_uw_raw: Optional[str] = None
+    theta_qwp_raw: Optional[str] = None
     malus: Optional[MalusData] = None
     halfwave: Optional[HalfWaveData] = None
     quarterwave: Optional[QuarterWaveData] = None

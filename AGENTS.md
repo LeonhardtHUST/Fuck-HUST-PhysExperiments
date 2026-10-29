@@ -61,6 +61,23 @@ python -m ocr_dataset.templates --check                        # 必须通过
 - 合并逻辑集中在 `mergeArtifactNotes`（`frontend/src/lib/artifact-scope.ts`），改动导入语义时同步补 `frontend/tests/experiment-artifact.test.ts`。
 - `schemaVersion` 必须为 `1`；`experiment.id` 必须与当前工作台一致，否则拒绝导入。
 
+### 原始读数只搬运，派生量按规则修约
+
+有效数字是实验数据的一部分：`1.20` 与 `1.2` 不是同一个精度，`0.000100` 与 `0.0001` 也不同。
+链路分两半，谁都不许越界：
+
+- **原始读数**：artifact / 读数 JSON 的数值列一律写字符串（`encodeCell`，见 `frontend/src/lib/experiment-artifact.ts`）；
+  报告请求额外带原样字符串 `rows_raw` / `params_raw`（通用、声光）与每行 `raw`（偏振光），
+  与数字字段来自**同一个 trim 后的数组**，禁止从数字反推字符串。
+- **原始数据表**只读 raw：`documents.raw_cell` / `docbuild._cell` / `soundlight.docs._raw_col`；
+  raw 缺失才回落到数字格式化，且回落时不做固定小数位重排。
+- **派生量**统一走 `backend/experiments/core/precision.py` 的 `format_result`（规则表 + 全局键名 + 列继承）；
+  适配器、引擎里**不要**再 `round()` 结果，否则就是双重修约。
+- 新增结果键后跑 `cd backend && python -m experiments.core.precision --audit`，
+  落到 `default:sig4` 的会被点名，需要显式补规则。
+- `decimal_places` 已从 config 契约移除（`experiments/schema.py`）：不要恢复「建议保留不超过 N 位小数」，
+  那会把学生真实的 4 位估读劝成 3 位。
+
 ### 表格行数是动态的
 
 数据表支持自由增删行，校验按配置里的最小行数放行（见提交 `19d8054`、`ead6561`）。不要在新代码里假设固定行数或按空行截断。
@@ -121,6 +138,21 @@ python -m ocr_dataset.templates --check                        # 必须通过
 ### 6. UI 改动要看得见
 
 类型检查和单测通过不代表界面正确。改动工作台后，起服务用 Playwright 截图或量测：工具条对齐、弹窗、备注卡片、导入确认、AI 参考值这些都要实际看一眼。临时脚本用完删除，不要留在仓库里。
+
+没有 Playwright 也能截图（实测可用，零依赖）：自己起一个无头 Edge，用 CDP 驱动。
+
+```bash
+"/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" \
+  --headless=new --remote-debugging-port=9444 --remote-allow-origins=* \
+  --user-data-dir="$TEMP/edge-cdp" --no-first-run --no-default-browser-check \
+  --disable-gpu --window-size=1440,1200 about:blank
+curl -s --noproxy '*' http://127.0.0.1:9444/json/version   # 确认端口
+```
+
+- 用 `PUT /json/new?about:blank` 开标签页拿 `webSocketDebuggerUrl`，Node 22 自带 `WebSocket` 直接发 `Page.navigate` / `Runtime.evaluate` / `Input.insertText` / `Page.captureScreenshot`；
+- 键入读数要用 `Input.insertText`（React 受控输入会正常收到 onChange），再用 `Runtime.evaluate` 读回 `.value` 断言位数没被吃掉；
+- 只连自己起的实例（单独端口 + 独立 `--user-data-dir`），**不要**碰用户已开的浏览器；
+- 服务端仍要按第 7 条 detach 启动，收尾 `npm run stop` 并复查端口释放。
 
 ### 7. 常驻服务绝不能在前台跑
 
