@@ -40,7 +40,7 @@ import DataInputTable from "@/components/workspace/DataInputTable";
 import ArtifactActions, { type OcrTarget } from "@/components/workspace/ArtifactActions";
 import { applyOcrValues, editableCellCount } from "@/lib/ocr-apply";
 import ArtifactRemarks from "@/components/workspace/ArtifactRemarks";
-import { rowIndexValue } from "@/lib/table-specs";
+import { applyImportedRow, recordsToGrid as importedRowsToGrid } from "@/lib/polarization-grid";
 import { getExperimentSpec } from "@/lib/experiment-specs";
 import type { ArtifactInput } from "@/lib/experiment-artifact";
 import {
@@ -119,16 +119,11 @@ function gridToRecords(tableId: string, grid: string[][]): Record<string, string
   );
 }
 
-/** 只读角度列按行序重建，与导入/增行的规则一致。 */
+/** 只读角度列：文件里有实测值就用实测值，缺失才按行序补（见 polarization-grid.ts）。 */
 function recordsToGrid(tableId: string, records: Record<string, string>[]): string[][] {
   const table = POLARIZATION_SPEC.tables.find((item) => item.tableId === tableId);
   if (!table) return [];
-  return records.map((record, rowIndex) =>
-    table.columns.map((column) => {
-      const derived = rowIndexValue(column, rowIndex);
-      return derived !== undefined ? String(derived) : (record[column.key] ?? "");
-    })
-  );
+  return importedRowsToGrid(table, records);
 }
 
 function numberOrNull(value: string): number | null {
@@ -314,12 +309,9 @@ function PolarizationWorkspace({
       const rowCount = Math.max(table.rows.length, specTable.minRows);
       const next = Array.from({ length: rowCount }, (_, rowIndex) => {
         const imported = table.rows[rowIndex] ?? {};
-        return specTable.columns.map((column) => {
-          const derived = rowIndexValue(column, rowIndex);
-          if (derived !== undefined) return String(derived);
-          const value = imported[column.key];
-          return value === null || value === undefined ? "" : String(value);
-        });
+        return specTable.columns.map((column) =>
+          applyImportedRow(column, imported[column.key], rowIndex)
+        );
       });
       if (table.tableId === "malus") setMalusData(next);
       else if (table.tableId === "halfwave") setHwData(next);
