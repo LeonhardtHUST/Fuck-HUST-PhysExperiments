@@ -139,6 +139,21 @@ python -m ocr_dataset.templates --check                        # 必须通过
 
 类型检查和单测通过不代表界面正确。改动工作台后，起服务用 Playwright 截图或量测：工具条对齐、弹窗、备注卡片、导入确认、AI 参考值这些都要实际看一眼。临时脚本用完删除，不要留在仓库里。
 
+没有 Playwright 也能截图（实测可用，零依赖）：自己起一个无头 Edge，用 CDP 驱动。
+
+```bash
+"/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" \
+  --headless=new --remote-debugging-port=9444 --remote-allow-origins=* \
+  --user-data-dir="$TEMP/edge-cdp" --no-first-run --no-default-browser-check \
+  --disable-gpu --window-size=1440,1200 about:blank
+curl -s --noproxy '*' http://127.0.0.1:9444/json/version   # 确认端口
+```
+
+- 用 `PUT /json/new?about:blank` 开标签页拿 `webSocketDebuggerUrl`，Node 22 自带 `WebSocket` 直接发 `Page.navigate` / `Runtime.evaluate` / `Input.insertText` / `Page.captureScreenshot`；
+- 键入读数要用 `Input.insertText`（React 受控输入会正常收到 onChange），再用 `Runtime.evaluate` 读回 `.value` 断言位数没被吃掉；
+- 只连自己起的实例（单独端口 + 独立 `--user-data-dir`），**不要**碰用户已开的浏览器；
+- 服务端仍要按第 7 条 detach 启动，收尾 `npm run stop` 并复查端口释放。
+
 ### 7. 常驻服务绝不能在前台跑
 
 `npm run dev` / `npm run prod` 按设计**独占当前控制台**，直到 `Ctrl+C` 或 `npm run stop`（命令与参数 refer to `README.md`「本地运行（开发者）」）。在代理会话里前台执行只有两种结局：等到超时，或超时被杀并连带打断正在跑的构建。
