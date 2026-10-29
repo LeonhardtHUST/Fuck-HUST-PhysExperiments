@@ -25,9 +25,9 @@ README 只覆盖启动与构建，下面的检查需自己执行：
 | 范围 | 命令 |
 | --- | --- |
 | 前端类型 | `cd frontend && npx tsc --noEmit` |
-| 前端单测 | `cd frontend && npm test`（= `vp test`，Vitest 5；15 文件 / 100 用例） |
+| 前端单测 | `cd frontend && npm test`（= `vp test`，Vitest 5；17 文件 / 110 用例） |
 | 前端 lint + 类型 | `cd frontend && npm run check`（= `vp check --no-fmt`；格式检查未纳入准入） |
-| 后端 | `cd backend && python -m pytest -q`（约 570 项；定位用 `-k` / `-m fast`） |
+| 后端 | `cd backend && python -m pytest -q`（约 640 项；定位用 `-k` / `-m fast`） |
 | 静态构建 | refer to `README.md`「一键脚本」（`npm run build`，产物 `frontend/out`） |
 | 生产模式产物 | 启动方式 refer to `README.md`；起来后逐项请求 `/`、一个深链（`/experiments/<slug>/workspace/`）、`/_next/static/**` 的 css 与 js、一个不存在的路径（须 404）、`HEAD /`、`/health` |
 | UI | 启动方式 refer to `README.md`；改动后必须截图核查，见「UI 改动要看得见」 |
