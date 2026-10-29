@@ -64,7 +64,7 @@ def test_jsonc_report_matches_the_repository_schema(experiment_id):
     assert response.headers["content-type"].startswith("application/jsonc")
     assert ".jsonc" in response.headers["content-disposition"]
     text = response.content.decode("utf-8")
-    assert text.startswith("// PhysicsLab 完整报告（JSONC）")
+    assert text.startswith("// PhysExp Killer 完整报告（JSONC）")
     assert SCHEMA_PATH in text
 
     document = json.loads(_strip_jsonc(text))

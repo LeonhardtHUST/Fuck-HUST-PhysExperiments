@@ -4,16 +4,18 @@
 
 for HUST Physics Experiments
 
-模型驱动的下一代华中科技大学物理实验综合实验平台
+模型驱动的下一代华中科技大学物理实验综合平台
+
+> 界面中显示的产品名为 **PhysExp Killer**（仓库与工程标识为 `NMSL-HUST-PhysExp`，下文正文用产品名指代本平台）。
 
 - **实验数据录入** —— 手写记录表拍照上传，自动识别成数据
 - **数据处理** —— 计算、误差分析、最小二乘拟合
 - **曲线绘制** —— 结果图自动生成并按报告规范排版
 - **实验报告** —— 一键导出含数据表、图像与计算结果的 Word / PDF，也可下载 Markdown / JSONC
 
-> PhysLab **不替代实验**。纸笔记录、动手操作、观察现象仍是实验课的核心；PhysLab 只是把实验之后的数据处理与出图变成一分钟的事。
+> PhysExp Killer **不替代实验**。纸笔记录、动手操作、观察现象仍是实验课的核心；PhysExp Killer 只是把实验之后的数据处理与出图变成一分钟的事。
 
-**在线使用**：<https://bogger111.github.io/Physicallab/> · **问题反馈**：<https://github.com/Bogger111/Physicallab/issues>
+**在线使用**：<https://leonhardthust.github.io/NMSL-HUST-PhysExp/> · **问题反馈**：<https://github.com/LeonhardtHUST/NMSL-HUST-PhysExp/issues>
 
 ---
 
@@ -21,7 +23,7 @@ for HUST Physics Experiments
 
 ### 📷 OCR 辅助实验数据录入
 
-上传手写实验记录表的照片，PhysLab 会定位表格、切出每一个手写数值并给出识别候选。所有候选值都由你确认或修改后才进入计算。
+上传手写实验记录表的照片，PhysExp Killer 会定位表格、切出每一个手写数值并给出识别候选。所有候选值都由你确认或修改后才进入计算。
 
 ### 📊 自动数据处理
 
@@ -61,7 +63,7 @@ for HUST Physics Experiments
 | 6. 生成实验报告 | 下载 Word / PDF 报告（或 Markdown / JSONC），含数据表、图像与计算结果 |
 
 <p align="center">
-  <img src="docs/images/home.png" alt="PhysLab 首页" width="720">
+  <img src="docs/images/home.png" alt="PhysExp Killer 首页" width="720">
 </p>
 
 <table>
@@ -119,7 +121,7 @@ for HUST Physics Experiments
 ```
 User
  │
-PhysLab（vinext / Vite 界面 + FastAPI 服务）
+PhysExp Killer（vinext / Vite 界面 + FastAPI 服务）
  │
 Experiment Processing（计算 · 误差分析 · 拟合绘图 · 报告）
  │
@@ -130,7 +132,7 @@ OCR Dataset（image, text）
 PhysLab_OCR（CRNN + CTC 识别模型训练）
 ```
 
-PhysLab 负责采集与切分，[PhysLab_OCR](https://github.com/Bogger111/PhysLab_OCR) 负责数据集与模型训练——两个仓库职责分离。
+PhysExp Killer 负责采集与切分，[PhysLab_OCR](https://github.com/Bogger111/PhysLab_OCR) 负责数据集与模型训练——两个仓库职责分离。
 
 ## 开发状态
 
@@ -268,7 +270,7 @@ PHYSICSLAB_DEV_MODE=true        # 打开开发者统计面板
 
 ### MCP Server（可选，仅本地）
 
-PhysLab 也能作为 MCP Server 被 AI 客户端（codex / opencode / CodeBuddy / Claude Desktop）直接调用：选实验、校验数据、计算绘图、生成 Word/PDF/Markdown/JSONC 报告与记录表。它与网页**共用同一套计算核心**。
+PhysExp Killer 也能作为 MCP Server 被 AI 客户端（codex / opencode / CodeBuddy / Claude Desktop）直接调用：选实验、校验数据、计算绘图、生成 Word/PDF/Markdown/JSONC 报告与记录表。它与网页**共用同一套计算核心**。
 
 **MCP 只在本机运行**：不监听端口、不走网络、不随 `npm run deploy` 或云端镜像一起部署——`backend/Dockerfile` 不打包它，`backend/.dockerignore` 也把它排除在构建上下文外。上云的只有 `uvicorn` 暴露的 HTTP 后端。
 
@@ -293,7 +295,7 @@ npm run mcp            # 前台启动 stdio 服务器，Ctrl+C 结束；AI 客�
 
 配置写法、工具清单、`data` 三种结构与排障见 [docs/mcp.md](docs/mcp.md)。
 
-更多细节见 [docs/physkiller-2.0.md](docs/physkiller-2.0.md)（架构与流水线）、[docs/report-format.md](docs/report-format.md)（报告导出格式与 JSONC schema）、[docs/screenshots.md](docs/screenshots.md)（截图清单）、[CHANGELOG.md](CHANGELOG.md)（发布说明）。
+更多细节见 [docs/architecture.md](docs/architecture.md)（架构与流水线）、[docs/report-format.md](docs/report-format.md)（报告导出格式与 JSONC schema）、[docs/screenshots.md](docs/screenshots.md)（截图清单）、[CHANGELOG.md](CHANGELOG.md)（发布说明）。
 
 ## 部署到 CloudBase
 
@@ -326,7 +328,7 @@ tcb login          # 国际站环境先执行 tcb config set isIntl true
 
 ## 反馈
 
-- 使用问题与建议：<https://github.com/Bogger111/Physicallab/issues>
+- 使用问题与建议：<https://github.com/LeonhardtHUST/NMSL-HUST-PhysExp/issues>
 - 匿名化数据收集相关疑问（授权、撤回、隐私）：同样通过 issue 联系
 
 ---

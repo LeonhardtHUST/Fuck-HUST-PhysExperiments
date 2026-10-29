@@ -100,7 +100,7 @@ def _utc_now() -> str:
 def to_jsonc(document: dict[str, Any]) -> str:
     """Serialise with a JSONC header; strip the ``//`` lines to get strict JSON."""
     header = "\n".join((
-        "// PhysicsLab 完整报告（JSONC）",
+        "// PhysExp Killer 完整报告（JSONC）",
         f"// schemaVersion: {SCHEMA_VERSION} · schema: {SCHEMA_PATH}",
         "// 删除注释行后即为合法 JSON；content 按文档顺序排列。",
     ))

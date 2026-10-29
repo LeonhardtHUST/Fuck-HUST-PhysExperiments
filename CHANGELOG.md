@@ -1,11 +1,12 @@
 # Changelog
 
-PhysLab 的版本记录。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
+NMSL-HUST-PhysExp 的版本记录。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
 ## Unreleased
 
 ### Changed
 
+- **项目更名为 `NMSL-HUST-PhysExp`（Next-Generation Model-Powered Synthesis Laboratory，中文名「模型驱动的下一代华中科技大学物理实验综合平台」），界面显示名统一为 `PhysExp Killer`**：改名分两层——仓库与工程标识（仓库名、Pages basePath、`package.json` description、FastAPI title、`dev` 脚本控制台标题、工程文档）用 `NMSL-HUST-PhysExp`，用户可见的产品名（浏览器标题、Header、页脚、隐私页、数据收集弹窗、JSONC 报告头）用 `PhysExp Killer`，避免界面持续露出仓库名的缩写。`docs/physkiller-2.0.md` 随之改名为 `docs/architecture.md`。**未改**：`physlab_mcp` 包名、`physicslab-api` 服务名、`PhysicsLabContainer` Durable Object 类名、`PHYSICSLAB_*` 环境变量、`physlab:draft:v1:` 等 localStorage key、`PhysLab_OCR` 数据集契约——这些是协议或已上线的外部标识，改名会破坏客户端、云端部署或用户已存草稿
 - **前端框架从 Next.js 换成 vinext（Vite 8 / Rolldown）**：应用代码零改动（`app/` 目录、`next/link`、`metadata`、`generateStaticParams`、`output: "export"` 全部保留），构建从冷启动约 8 分钟降到 10 秒级。静态产物契约不变：仍是 `frontend/out` + 每路由 `index.html` + `trailingSlash` + 真 `404.html` + `_next/static/**` 的 immutable 缓存，四条托管通道（本地 `serve-static`、GitHub Pages、Oracle nginx、CloudBase）无需改配置
 - **前端工具链迁到 Vite+**：`npm test` 改为 `vp test`（Vitest 5，15 文件 / 100 用例），新增 `npm run check`（`vp check --no-fmt`，Oxlint + 类型检查）；15 个单测只把 `node:test` 的 import 换成 `vite-plus/test`，断言仍是 `node:assert`
 - **Node 基线抬到 22.18**：`vinext` 要求 Node >= 22，`vite-plus` 要求 `^22.18 || ^24.11 || >=26`；CI 与 Oracle 前端镜像同步换成 Node 22

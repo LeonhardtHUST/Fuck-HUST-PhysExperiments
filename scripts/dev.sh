@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Start (or build / stop) the PhysicsLab backend and frontend locally.
+# Start (or build / stop) the NMSL-HUST-PhysExp backend and frontend locally.
 #
 # Modes:
 #   dev   (default)  backend : uvicorn --reload on http://127.0.0.1:8001
@@ -279,7 +279,7 @@ show_banner() {
     local mode="$1" backend_state="$2" frontend_state="$3" hint="$4"
 
     echo ""
-    echo "PhysicsLab local development"
+    echo "NMSL-HUST-PhysExp local development"
     printf '  backend  : %s   (API docs: %s/docs)  %s\n' \
         "http://127.0.0.1:$BACKEND_PORT" "http://127.0.0.1:$BACKEND_PORT" "$backend_state"
     printf '  frontend : %s   %s\n' "http://localhost:$FRONTEND_PORT" "$frontend_state"

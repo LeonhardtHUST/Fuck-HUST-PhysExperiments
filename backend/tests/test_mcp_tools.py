@@ -241,7 +241,7 @@ def test_report_writes_the_text_formats(fmt, isolated_output_dir):
         assert content.startswith("<!-- physlab.report")
     else:
         assert artifact["mime"] == "application/jsonc"
-        assert content.startswith("// PhysicsLab 完整报告（JSONC）")
+        assert content.startswith("// PhysExp Killer 完整报告（JSONC）")
 
 
 def test_report_filenames_are_windows_safe():

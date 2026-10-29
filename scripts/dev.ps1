@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Start (or build / stop) the PhysicsLab backend and frontend locally.
+    Start (or build / stop) the NMSL-HUST-PhysExp backend and frontend locally.
 
 .DESCRIPTION
     Default (dev) mode:
@@ -161,7 +161,7 @@ function Show-Banner {
     $frontendUrl = "http://localhost:$FrontendPort"
 
     Write-Host ''
-    Write-Host 'PhysicsLab local development'
+    Write-Host 'NMSL-HUST-PhysExp local development'
     Write-Host ("  backend  : {0}   (API docs: {0}/docs)  {1}" -f $backendUrl, $BackendState)
     Write-Host ("  frontend : {0}   {1}" -f $frontendUrl, $FrontendState)
     Write-Host ("  mode     : {0}" -f $Mode)

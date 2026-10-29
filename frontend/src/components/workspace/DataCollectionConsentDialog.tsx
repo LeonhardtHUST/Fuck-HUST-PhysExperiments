@@ -91,7 +91,7 @@ export default function DataCollectionConsentDialog({
           </span>
           <div className="min-w-0">
             <h2 className="text-lg font-extrabold tracking-tight text-stone-900">
-              {isPrompt ? "帮助改进 PhysLab（可选）" : "匿名化数据收集"}
+              {isPrompt ? "帮助改进 PhysExp Killer（可选）" : "匿名化数据收集"}
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-stone-600">
               勾选后，生成报告时会保存<b>本次确认的实验数值</b>与<b>你自愿附上的记录表照片</b>，

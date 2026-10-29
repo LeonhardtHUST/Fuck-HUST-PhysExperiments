@@ -1,4 +1,4 @@
-# PhysKiller 2.0 工程说明
+# NMSL-HUST-PhysExp 工程说明
 
 ## 统一实验标准
 
@@ -49,7 +49,7 @@
         ↓ 决定写入 localStorage 后继续生成报告
      报告生成成功 → commit（collection_mode=true，状态 confirmed）
         ↓
-     感谢弹窗（改进项 / 实验名 / 生成样本数 + 继续使用 PhysLab / 撤回本次贡献）
+     感谢弹窗（改进项 / 实验名 / 生成样本数 + 继续使用 PhysExp Killer / 撤回本次贡献）
 ```
 
 - 偏好存在 `physlab:data-collection-consent:v1`：`{"v":1,"status":"granted"|"declined","decidedAt":…}`。「是否问过」= key 是否存在，因此**弹过一次就不会再自动弹**；`shouldPrompt`（`frontend/src/lib/data-collection-consent.ts`）是唯一判定点。
@@ -91,7 +91,7 @@ backend/data_collection/
 
 ## 数据采集 → OCR 训练集流水线
 
-两个仓库职责分离：PhysLab 负责采集与切分，PhysLab_OCR 负责数据集与 CRNN 训练。
+两个仓库职责分离：PhysExp Killer 负责采集与切分，PhysLab_OCR 负责数据集与 CRNN 训练。
 
 ```
 学生拍照上传（明确同意，可撤回）

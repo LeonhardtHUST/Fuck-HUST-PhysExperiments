@@ -27,7 +27,7 @@ logger = logging.getLogger("physlab_mcp")
 
 SERVER_NAME = "physlab"
 
-INSTRUCTIONS = """PhysLab 是华中科技大学大学物理实验的数据处理助手，全部计算在本地完成，不调用任何外部模型。
+INSTRUCTIONS = """PhysExp Killer 是华中科技大学大学物理实验的数据处理助手，全部计算在本地完成，不调用任何外部模型。
 
 推荐顺序：
 1. list_experiments 选实验（返回每个实验的 id 与请求结构 payload_kind）

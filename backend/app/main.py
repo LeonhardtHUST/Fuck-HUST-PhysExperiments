@@ -1,4 +1,4 @@
-"""PhysicsLab FastAPI application composition root."""
+"""NMSL-HUST-PhysExp FastAPI application composition root."""
 
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ BUILD_COMMIT = os.environ.get("GIT_COMMIT", "unknown")
 BUILD_REVISION = os.environ.get("K_REVISION", "local")
 
 app = FastAPI(
-    title="PhysicsLab API",
+    title="NMSL-HUST-PhysExp API",
     version=APP_VERSION,
     default_response_class=SafeJSONResponse,
 )
@@ -104,7 +104,7 @@ app.include_router(reports.router)
 
 @app.get("/")
 async def root():
-    return {"message": "PhysicsLab API", "version": APP_VERSION}
+    return {"message": "NMSL-HUST-PhysExp API", "version": APP_VERSION}
 
 
 @app.get("/health")

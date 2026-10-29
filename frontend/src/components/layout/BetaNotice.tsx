@@ -13,7 +13,7 @@ export default function BetaNotice() {
           计算流程与合成数据测试已通过；真实实验读数、OCR 结果和最终报告请逐项复核。
         </p>
         <a
-          href="https://github.com/Bogger111/Physicallab/issues"
+          href="https://github.com/LeonhardtHUST/NMSL-HUST-PhysExp/issues"
           target="_blank"
           rel="noreferrer"
           className="shrink-0 font-semibold text-amber-900 underline decoration-amber-400 underline-offset-2 hover:text-amber-700"

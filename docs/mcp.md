@@ -1,6 +1,6 @@
 # MCP 接入（可选）
 
-PhysLab 可以作为 **MCP Server**，把「选实验 → 取结构 → 校验 → 计算 → 出报告」这套能力暴露给 codex、opencode、CodeBuddy、Claude Desktop 等 AI 客户端。用户在客户端里说「用这组迈克尔逊数据算波长并生成报告」，代理就会调用本项目的工具完成计算与文档生成。
+PhysExp Killer 可以作为 **MCP Server**，把「选实验 → 取结构 → 校验 → 计算 → 出报告」这套能力暴露给 codex、opencode、CodeBuddy、Claude Desktop 等 AI 客户端。用户在客户端里说「用这组迈克尔逊数据算波长并生成报告」，代理就会调用本项目的工具完成计算与文档生成。
 
 - 两种用法（网页 / MCP）**共用同一套计算核心**（`experiments.core.registry`），结果一致。
 - **只在本机跑**：MCP 是本地能力，不监听端口、不走网络，也**不随 HTTP 后端一起上云**——`backend/Dockerfile` 不打包 `mcp_server.py` / `physlab_mcp/`，`backend/.dockerignore` 把它们排除在 Cloud Run 构建上下文外，`npm run deploy` 与部署编排都不会启动它。
@@ -136,7 +136,7 @@ CodeBuddy：设置 → MCP → Add MCP，在打开的 JSON 里填；Claude Deskt
       "type": "stdio",
       "command": "D:/Projects/Fuck-HUST-PhysExperiments/.venv/Scripts/python.exe",
       "args": ["D:/Projects/Fuck-HUST-PhysExperiments/backend/mcp_server.py"],
-      "description": "PhysLab 大学物理实验数据处理"
+      "description": "PhysExp Killer 大学物理实验数据处理"
     }
   }
 }

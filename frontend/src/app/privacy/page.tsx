@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "隐私说明 — PhysLab Killer 2.0",
+  title: "隐私说明 — PhysExp Killer 2.0",
   description: "匿名化数据收集的范围、处理方式与关闭方式。",
 };
 

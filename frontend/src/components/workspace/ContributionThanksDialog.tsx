@@ -42,7 +42,7 @@ export default function ContributionThanksDialog({
           </span>
           <div className="min-w-0">
             <h2 className="text-lg font-extrabold tracking-tight text-stone-900">
-              感谢你帮助改进 PhysLab
+              感谢你帮助改进 PhysExp Killer
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-stone-600">
               你的本次实验记录已经匿名化，用于改进：
@@ -103,7 +103,7 @@ export default function ContributionThanksDialog({
             onClick={collection.dismissThanks}
             className="inline-flex h-10 items-center gap-2 rounded-xl bg-stone-900 px-5 text-sm font-bold text-white"
           >
-            继续使用 PhysLab
+            继续使用 PhysExp Killer
             <ArrowRight className="h-4 w-4" />
           </button>
         </div>

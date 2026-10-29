@@ -2,7 +2,7 @@
   "name": "physicslab",
   "version": "2.0.0-beta.1",
   "private": true,
-  "description": "HUST 大学物理实验平台：vinext（Vite）前端 + FastAPI 后端",
+  "description": "NMSL-HUST-PhysExp / PhysExp Killer：华中科技大学物理实验综合平台（vinext 前端 + FastAPI 后端）",
   "scripts": {
     "dev": "node scripts/dev.mjs dev",
     "build": "node scripts/dev.mjs build",

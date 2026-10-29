@@ -44,7 +44,7 @@ Cloudflare Containers 需要 Workers Paid 计划。部署前，如果使用自�
 
 部署后先检查 `https://<你的-worker>.workers.dev/health`，再从 Pages 页面验证 `/api/experiments`、数据处理和报告下载。
 
-PhysKiller 2.0 的匿名分析和 OCR 反馈默认写入容器临时目录中的 SQLite。若需要在自托管后端保留统计，应通过环境变量 `PHYSICSLAB_TELEMETRY_DB` 指向持久卷；不要把该数据库提交到 Git。默认 OCR provider 是 RapidOCR，只有在镜像额外安装 PaddleOCR 后才设置 `PHYSICSLAB_OCR_PROVIDER=paddleocr`。
+NMSL-HUST-PhysExp 的匿名分析和 OCR 反馈默认写入容器临时目录中的 SQLite。若需要在自托管后端保留统计，应通过环境变量 `PHYSICSLAB_TELEMETRY_DB` 指向持久卷；不要把该数据库提交到 Git。默认 OCR provider 是 RapidOCR，只有在镜像额外安装 PaddleOCR 后才设置 `PHYSICSLAB_OCR_PROVIDER=paddleocr`。
 
 ## CloudBase（静态托管 + 云托管）
 
