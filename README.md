@@ -165,6 +165,7 @@ PhysExp Killer 负责采集与切分，[PhysLab_OCR](https://github.com/Bogger11
 | `npm run stop` | 停掉占用 8001 / 3000 的进程 |
 | `npm run mcp` | 前台启动本地 MCP Server（stdio，供 AI 客户端接入；不监听端口，见下） |
 | `npm run mcp:check` | 打印 MCP 工具清单自检，不进入协议、不常驻 |
+| `npm run mcp:config` | 按当前机器生成可直接粘贴的 MCP 客户端配置（绝对路径自动填好） |
 | `npm run deploy` | 一键部署到 CloudBase：后端云托管 + 前端静态托管，详见「部署到 CloudBase」 |
 | `npm run deploy:backend` | 只重建云托管容器 |
 | `npm run deploy:frontend` | 只构建并上传前端静态产物 |
@@ -214,7 +215,7 @@ npm run prod -- --no-browser --detach     # 构建 + 后台生产模式，不弹
 | `dev.sh` | bash（Git Bash / Linux / macOS） | 与 `dev.ps1` 等价，参数为 `--build` / `--prod` / `--detach` / `--stop` |
 | `dev.mjs` | 跨平台（npm 脚本入口） | `npm run dev / build / prod / stop` 的分发器，自动选用上面的 `.ps1` 或 `.sh` |
 | `serve-static.mjs` | 跨平台 | 生产模式的零依赖静态服务器，托管 `frontend/out`（目录补 `/` 301、`index.html` 落盘、MIME、缓存头、404） |
-| `mcp.mjs` | 跨平台（npm 脚本入口） | `npm run mcp` / `mcp:check` 的启动器：定位 `.venv` 解释器、检查 `mcp` 依赖，再转发到 `backend/mcp_server.py` |
+| `mcp.mjs` | 跨平台（npm 脚本入口） | `npm run mcp` / `mcp:check` / `mcp:config` 的实现：定位 `.venv` 解释器、检查 `mcp` 依赖，再转发到 `backend/mcp_server.py`；`mcp:config` 只打印配置片段不启动 server |
 | `deploy.mjs` | 跨平台（npm 脚本入口） | `npm run deploy / deploy:backend / deploy:frontend` 的实现：预检环境、云托管部署、解析并缓存 API 地址、注入构建、上传静态托管 |
 | `export_ocr_dataset.py` | 跨平台（Python） | 导出经用户明确同意并确认的记录，供后续 OCR 研究使用；不做训练、裁剪或识别 |
 | `generate_simulated_reports.py` | 跨平台（Python） | 生成整套合成报告，用于打印排版 QA（数字仅为夹具，不代表真实结果正确性） |
@@ -243,6 +244,7 @@ npm run prod -- --no-browser --detach     # 构建 + 后台生产模式，不弹
 | `npm run stop` | `vpr stop` |
 | `npm run mcp` | `vpr mcp` |
 | `npm run mcp:check` | `vpr mcp:check` |
+| `npm run mcp:config` | `vpr mcp:config` |
 | `npm run deploy` | `vpr deploy` |
 
 - **附加参数不要写 `--`**：npm 会吞掉 `--`，`vpr` 则把它原样传给脚本（`vpr prod -- --no-browser` 会被 `dev.mjs` 当成未知参数拒绝）。Vite+ 用户请直接写 `vpr prod --no-browser`、`vpr dev --no-browser`。
@@ -276,6 +278,7 @@ PhysExp Killer 也能作为 MCP Server 被 AI 客户端（codex / opencode / Cod
 
 ```bash
 npm run mcp:check      # 打印 9 个工具的自检清单（stderr），不进入协议、不常驻
+npm run mcp:config     # 按当前机器生成可粘贴的客户端配置（绝对路径已填好）
 npm run mcp            # 前台启动 stdio 服务器，Ctrl+C 结束；AI 客户端会自己拉起 python 入口
 ```
 

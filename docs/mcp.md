@@ -27,6 +27,7 @@ python backend/mcp_server.py --check   # 等价的手写方式
 | 命令 | Vite+ | 作用 |
 |---|---|---|
 | `npm run mcp:check` | `vpr mcp:check` | 打印工具清单后退出 |
+| `npm run mcp:config` | `vpr mcp:config` | 按当前机器生成三份可粘贴的客户端配置（见「接入配置」） |
 | `npm run mcp` | `vpr mcp` | 前台启动 stdio 服务器（日志在 stderr），`Ctrl+C` 结束；参数原样转发给 `mcp_server.py`，如 `npm run mcp -- --list-tools` |
 
 - `scripts/mcp.mjs` 按 `PHYSICSLAB_PYTHON` → `.venv/Scripts/python.exe` → `.venv/bin/python` → PATH 的顺序找解释器，找不到或没装 `mcp` 会直接报错并给出安装命令。
@@ -96,14 +97,22 @@ python backend/mcp_server.py --check   # 等价的手写方式
 
 ## 接入配置
 
-三份配置只差写法，`command` 一律写**虚拟环境 python 的绝对路径**，`args` 写入口脚本的绝对路径（相对路径取决于客户端的工作目录，容易踩坑）。
+MCP 客户端自己 spawn 子进程，工作目录不可控，所以 `command` / `args` 必须写**本机绝对路径**：写相对路径找不到文件，抄别人的路径指向别人的磁盘。别手写，用仓库自带命令按当前机器生成：
+
+```bash
+npm run mcp:config      # = node scripts/mcp.mjs --print-config
+```
+
+输出三份可直接粘贴的片段，路径与平台都已填好（Windows 指向 `.venv/Scripts/python.exe`，Linux / macOS 指向 `.venv/bin/python`，统一用正斜杠）。移动过仓库或换了机器，重新跑一次即可。
+
+下面只说明三段配置的结构，`<repo>` 代表你的仓库绝对路径——**照抄会失败**，请以 `mcp:config` 的输出为准。
 
 ### codex（`~/.codex/config.toml`）
 
 ```toml
 [mcp_servers.physlab]
-command = "D:/Projects/Fuck-HUST-PhysExperiments/.venv/Scripts/python.exe"
-args = ["D:/Projects/Fuck-HUST-PhysExperiments/backend/mcp_server.py"]
+command = "<repo>/.venv/Scripts/python.exe"
+args = ["<repo>/backend/mcp_server.py"]
 startup_timeout_sec = 30
 ```
 
@@ -116,8 +125,8 @@ startup_timeout_sec = 30
     "physlab": {
       "type": "local",
       "command": [
-        "D:/Projects/Fuck-HUST-PhysExperiments/.venv/Scripts/python.exe",
-        "D:/Projects/Fuck-HUST-PhysExperiments/backend/mcp_server.py"
+        "<repo>/.venv/Scripts/python.exe",
+        "<repo>/backend/mcp_server.py"
       ],
       "enabled": true
     }
@@ -134,15 +143,15 @@ CodeBuddy：设置 → MCP → Add MCP，在打开的 JSON 里填；Claude Deskt
   "mcpServers": {
     "physlab": {
       "type": "stdio",
-      "command": "D:/Projects/Fuck-HUST-PhysExperiments/.venv/Scripts/python.exe",
-      "args": ["D:/Projects/Fuck-HUST-PhysExperiments/backend/mcp_server.py"],
+      "command": "<repo>/.venv/Scripts/python.exe",
+      "args": ["<repo>/backend/mcp_server.py"],
       "description": "PhysExp Killer 大学物理实验数据处理"
     }
   }
 }
 ```
 
-> Linux / macOS 把 `command` 换成 `<仓库>/.venv/bin/python`。
+> 解释器路径由 `mcp:config` 按平台生成，不需要自己替换 Windows / POSIX 两种写法。
 
 ## 环境变量
 

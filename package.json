@@ -10,6 +10,7 @@
     "stop": "node scripts/dev.mjs stop",
     "mcp": "node scripts/mcp.mjs",
     "mcp:check": "node scripts/mcp.mjs --check",
+    "mcp:config": "node scripts/mcp.mjs --print-config",
     "deploy": "node scripts/deploy.mjs",
     "deploy:backend": "node scripts/deploy.mjs backend",
     "deploy:frontend": "node scripts/deploy.mjs frontend"
