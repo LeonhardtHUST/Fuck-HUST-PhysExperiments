@@ -309,8 +309,8 @@ vinext 只给「**已经存在**于 `process.env` 的 `NEXT_PUBLIC_*`」生成 d
 
 - Pages 的 basePath 直接取 `github.event.repository.name`（`.github/workflows/deploy-pages.yml`），仓库一改名，线上地址从 `/<旧名>/` 变成 `/<新名>/`。**旧深链与分享链接全部 404**——GitHub 只重定向仓库页，不重定向 Pages 的资源路径。
 - `git remote set-url origin <新地址>` 要手动做；旧地址虽有 301，但推上去的是旧命名。
-- 改名后的第一次 `git push` 可能**不触发** Pages 工作流（`repos/<owner>/<repo>/actions/runs` 的 `total_count` 是 0，站点两个地址都 404）。手动补一次即可：
-  `gh workflow run deploy-pages.yml --repo <owner>/<repo> --ref master`，再 `gh run watch <id> --repo <owner>/<repo> --exit-status`。
+- 本仓库的 `push` **不触发** Pages 工作流（改名后连续两次 push 都没生成 run，`repos/<owner>/<repo>/actions/runs` 的 `total_count` 保持 0，站点两个地址都 404）。只能手动补：
+  `gh workflow run deploy-pages.yml --repo <owner>/<repo> --ref master`，再 `gh run watch <id> --repo <owner>/<repo> --exit-status`。改完前端要上线时记得手动跑一次。
 - `gh repo rename` 会按 remote 推断目标仓库，本仓库同时有 `origin` 和已失效的 `upstream`（`Bogger111/Physicallab`，父仓库已 404）时它会挑错并报 `HTTP 404`。必须显式指定：`gh repo rename <新名> --repo <owner>/<旧名> --yes`，之后手动 `git remote set-url origin <新地址>`。
 - 地址栏里的仓库名对用户始终可见，界面改名管不到 URL；要彻底不露出，只能挂自定义域名，或改用 CloudBase / Cloudflare Pages 的根路径部署。
 
